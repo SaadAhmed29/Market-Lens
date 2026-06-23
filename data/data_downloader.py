@@ -299,11 +299,10 @@ class DataDownloader:
         # Already up to date?
         if effective_start >= end_dt:
             logger.info(f"[{self.exchange}] {symbol}: already up to date.")
-            print(f"[–] {self.exchange.upper()} {symbol}: already up to date.")
             return
 
-        print(
-            f"[↓] {self.exchange.upper()} {symbol}: "
+        logger.info(
+            f"[{self.exchange}] {symbol}: "
             f"fetching {effective_start.date()} → {end_dt.date()} ..."
         )
 
@@ -316,14 +315,14 @@ class DataDownloader:
             raise ValueError(f"Unsupported exchange: {self.exchange}")
 
         if df.empty:
-            print(f"[–] {self.exchange.upper()} {symbol}: no new data returned.")
+            logger.info(f"[{self.exchange}] {symbol}: no new data returned.")
             return
 
         # Drop last row (incomplete candle)
         df = df.iloc[:-1]
 
         if df.empty:
-            print(f"[–] {self.exchange.upper()} {symbol}: no complete candles.")
+            logger.info(f"[{self.exchange}] {symbol}: no complete candles.")
             return
 
         # Fill missing data
@@ -331,7 +330,6 @@ class DataDownloader:
 
         # Insert into PostgreSQL
         rows = self._insert_rows(df, table_name)
-        print(f"[✓] {self.exchange.upper()} {symbol}: inserted {rows} rows.")
         logger.info(f"[{self.exchange}] {symbol}: inserted {rows} rows.")
 
     def download_all(self, symbols: list[str]) -> None:
@@ -341,4 +339,3 @@ class DataDownloader:
                 self.download(symbol)
             except Exception as exc:
                 logger.error(f"[{self.exchange}] {symbol}: failed – {exc}")
-                print(f"[✗] {self.exchange.upper()} {symbol}: failed – {exc}")

@@ -3,7 +3,10 @@ MarketLens - Bybit Exchange Planner
 Handles planning and coordination of data downloads for Bybit.
 """
 
+import logging
 from data.data_downloader import DataDownloader
+
+logger = logging.getLogger(__name__)
 
 
 class BybitExchangePlanner:
@@ -19,13 +22,17 @@ class BybitExchangePlanner:
         self.retries = config["retries"]
         self.retry_delay = config["retry_delay"]
 
-        # TODO: Initialize the DataDownloader with Bybit-specific settings
-        # self.downloader = DataDownloader(...)
+        self.downloader = DataDownloader(config)
 
     def plan(self) -> None:
         """Build and execute the download plan for all configured symbols."""
-        # TODO: Iterate over symbols and build download tasks
-        # TODO: Handle date range chunking if needed
-        # TODO: Invoke DataDownloader for each task
-        # TODO: Apply fill_missing_data strategy after download
-        pass
+        logger.info(f"Starting Bybit download plan for {len(self.symbols)} symbols.")
+        
+        for symbol in self.symbols:
+            try:
+                self.downloader.download(symbol)
+                logger.info(f"Successfully finished processing {symbol} on Bybit.")
+            except Exception as exc:
+                logger.error(f"Failed to process {symbol} on Bybit: {exc}")
+                
+        logger.info("Bybit download plan completed.")

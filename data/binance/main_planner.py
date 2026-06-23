@@ -3,11 +3,20 @@ MarketLens - Binance Main Planner
 Loads the Binance config and orchestrates the exchange planner.
 """
 
+import logging
 import yaml
 from pathlib import Path
 from datetime import date
 
 from data.binance.exchange_planner import BinanceExchangePlanner
+
+# Configure logging for the application
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S"
+)
+logger = logging.getLogger(__name__)
 
 
 def load_config() -> dict:
@@ -25,13 +34,16 @@ def load_config() -> dict:
 
 def run() -> None:
     """Main entry point: load config and delegate to the exchange planner."""
+    logger.info("Loading Binance configuration...")
     config = load_config()
 
-    # TODO: Add logging initialization
-    # TODO: Add config validation via utils.schema
-
+    logger.info("Initializing Binance exchange planner...")
     planner = BinanceExchangePlanner(config)
+    
+    logger.info("Executing Binance exchange plan...")
     planner.plan()
+    
+    logger.info("Binance main planner finished successfully.")
 
 
 if __name__ == "__main__":

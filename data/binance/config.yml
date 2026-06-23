@@ -1,0 +1,23 @@
+# MarketLens - Binance Exchange Configuration
+
+exchange: binance
+
+symbols:
+  - DOGE
+  - SOL
+  - BTC
+  - ETH
+  - ADA
+  - LTC
+  - MINA
+  - SUI
+
+time_horizon: "1d"
+
+start_date: "2023-01-01"
+end_date: "today"  # Resolved dynamically at runtime to current date
+
+fill_missing_data: "interpolation"
+
+retries: 3
+retry_delay: 5  # seconds between retries

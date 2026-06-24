@@ -6,7 +6,7 @@ Supports incremental updates, retry logic, and missing-data interpolation.
 
 import time
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 import pandas as pd
 from sqlalchemy import text
@@ -54,8 +54,8 @@ class DataFetcher:
     # Database helpers
 
     def _table_name(self, symbol: str) -> str:
-        """Return the DB table name for a given symbol, e.g. ``binance_data.binance_btc``."""
-        return f"{self.exchange}_data.{self.exchange}_{symbol.lower()}"
+        """Return the DB table name for a given symbol, e.g. ``binance_data.btc_1m``."""
+        return f"{self.exchange}_data.{symbol.lower()}_1m"
 
     def _get_latest_datetime(self, table_name: str) -> datetime | None:
         """Return the most recent ``date_time`` stored in *table_name*, or None."""
@@ -107,7 +107,7 @@ class DataFetcher:
         records = []
         for k in klines:
             records.append({
-                "date_time": datetime.utcfromtimestamp(k[0] / 1000),
+                "date_time": datetime.utcfromtimestamp(k[0] / 1000).replace(tzinfo=timezone.utc),
                 "open": float(k[1]),
                 "high": float(k[2]),
                 "low": float(k[3]),
@@ -155,7 +155,7 @@ class DataFetcher:
             result_list = list(reversed(result_list))
 
             for k in result_list:
-                ts = datetime.utcfromtimestamp(int(k[0]) / 1000)
+                ts = datetime.utcfromtimestamp(int(k[0]) / 1000).replace(tzinfo=timezone.utc)
                 all_records.append({
                     "date_time": ts,
                     "open": float(k[1]),
@@ -255,12 +255,15 @@ class DataFetcher:
         latest_dt = self._get_latest_datetime(table_name)
 
         if latest_dt is not None:
-            delta = INTERVAL_DELTAS.get(self.time_horizon, timedelta(days=1))
-            effective_start = latest_dt + delta
+            if latest_dt.tzinfo is None:
+                latest_dt = latest_dt.replace(tzinfo=timezone.utc)
+            effective_start = latest_dt
+            is_incremental = True
         else:
-            effective_start = datetime.strptime(self.start_date, "%Y-%m-%d")
+            effective_start = datetime.strptime(self.start_date, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+            is_incremental = False
 
-        end_dt = datetime.strptime(self.end_date, "%Y-%m-%d")
+        end_dt = datetime.strptime(self.end_date, "%Y-%m-%d").replace(tzinfo=timezone.utc)
 
         # Already up to date?
         if effective_start >= end_dt:
@@ -269,7 +272,7 @@ class DataFetcher:
 
         logger.info(
             f"[{self.exchange}] {symbol}: "
-            f"fetching {effective_start.date()} → {end_dt.date()} ..."
+            f"fetching {effective_start.date()} -> {end_dt.date()} ..."
         )
 
         # Fetch with retries
@@ -291,8 +294,25 @@ class DataFetcher:
             logger.info(f"[{self.exchange}] {symbol}: no complete candles.")
             return
 
+        # Compute volume percentage change
+        df['volume'] = df['volume'].pct_change()
+        
+        if is_incremental:
+            # Drop the overlapping candle we used just for pct_change reference
+            df = df.iloc[1:]
+        else:
+            # First fetch ever, set first pct_change to 0
+            df.loc[df.index[0], 'volume'] = 0.0
+
+        if df.empty:
+            logger.info(f"[{self.exchange}] {symbol}: no new data after processing volume.")
+            return
+            
         # Fill missing data
         df = self._fill_missing(df)
+        
+        # Round everything to 4 decimal places
+        df = df.round(4)
 
         # Insert into PostgreSQL
         rows = self._insert_rows(df, table_name)
@@ -323,16 +343,16 @@ def get_resampled_df(df: pd.DataFrame, time_frame: str, resample_1m: bool = Fals
         'high': 'max',
         'low': 'min',
         'close': 'last',
-        'volume': 'sum'
+        'volume': 'mean'
     }
     
     res_freq = PANDAS_FREQ.get(time_frame, time_frame)
-    resampled_df = df.resample(res_freq).agg(agg_dict).dropna()
+    resampled_df = df.resample(res_freq).agg(agg_dict).dropna().round(4)
     
     df_1m = None
     if resample_1m:
         freq_1m = PANDAS_FREQ.get("1m", "1min")
-        df_1m = df.resample(freq_1m).agg(agg_dict).dropna()
+        df_1m = df.resample(freq_1m).agg(agg_dict).dropna().round(4)
         
     return resampled_df, df_1m
 
@@ -343,11 +363,11 @@ def get_updated_df(exchange: str, symbol: str, start, end, time_frame: str, resa
     Fetches missing data from API if necessary and combines it with DB data.
     Does not update the database.
     """
-    start_dt = pd.to_datetime(start)
-    end_dt = pd.to_datetime(end)
+    start_dt = pd.to_datetime(start, utc=True)
+    end_dt = pd.to_datetime(end, utc=True)
     
     engine = get_engine()
-    table_name = f"{exchange}_data.{exchange}_{symbol.lower()}"
+    table_name = f"{exchange}_data.{symbol.lower()}_1m"
     
     query = text(f"""
         SELECT * FROM {table_name} 
@@ -358,22 +378,26 @@ def get_updated_df(exchange: str, symbol: str, start, end, time_frame: str, resa
     try:
         with engine.connect() as conn:
             db_df = pd.read_sql(query, conn, params={"start": start_dt, "end": end_dt}, index_col="date_time")
+            if not db_df.empty:
+                db_df.index = pd.to_datetime(db_df.index, utc=True)
     except Exception as e:
         logger.warning(f"Failed to read from DB: {e}")
         db_df = pd.DataFrame()
         
     missing_ranges = []
     if db_df.empty:
-        missing_ranges.append((start_dt, end_dt))
+        from datetime import timedelta
+        delta = timedelta(minutes=1)
+        missing_ranges.append((start_dt - delta, end_dt))
     else:
         db_start = db_df.index.min()
         db_end = db_df.index.max()
         from datetime import timedelta
         delta = timedelta(minutes=1)
         if db_start > start_dt:
-            missing_ranges.append((start_dt, db_start - delta))
+            missing_ranges.append((start_dt - delta, db_start - delta))
         if db_end < end_dt:
-            missing_ranges.append((db_end + delta, end_dt))
+            missing_ranges.append((db_end, end_dt))
             
     api_dfs = []
     if missing_ranges:
@@ -399,7 +423,10 @@ def get_updated_df(exchange: str, symbol: str, start, end, time_frame: str, resa
                 continue
                 
             if not df_part.empty:
-                api_dfs.append(df_part)
+                df_part['volume'] = df_part['volume'].pct_change().fillna(0.0)
+                df_part = df_part[df_part.index > m_start]
+                if not df_part.empty:
+                    api_dfs.append(df_part)
                 
     if api_dfs:
         api_df = pd.concat(api_dfs)
@@ -411,5 +438,6 @@ def get_updated_df(exchange: str, symbol: str, start, end, time_frame: str, resa
         final_df = final_df[~final_df.index.duplicated(keep="last")]
         final_df.sort_index(inplace=True)
         final_df = final_df[(final_df.index >= start_dt) & (final_df.index <= end_dt)]
+        final_df = final_df.round(4)
         
     return get_resampled_df(final_df, time_frame, resample_1m)

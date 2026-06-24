@@ -37,19 +37,19 @@ def get_engine():
 
 
 def _define_tables(metadata: MetaData, exchange: str) -> list[Table]:
-    """Define one OHLCV table per symbol for the given exchange.
+    """Define one OHLCV table per symbol for the given exchange under its schema.
 
-    Table names follow the pattern ``<exchange>_<symbol_lower>``,
-    e.g. ``binance_btc``, ``bybit_sol``.
+    Table names follow the pattern ``<symbol_lower>_1m``,
+    e.g. ``btc_1m``, ``sol_1m``.
     """
     tables = []
     for symbol in SYMBOLS:
-        table_name = f"{exchange}_{symbol.lower()}"
+        table_name = f"{symbol.lower()}_1m"
         schema_name = f"{exchange}_data"
         table = Table(
             table_name,
             metadata,
-            Column("date_time", TIMESTAMP, primary_key=True),
+            Column("date_time", TIMESTAMP(timezone=True), primary_key=True),
             Column("open", Float),
             Column("high", Float),
             Column("low", Float),

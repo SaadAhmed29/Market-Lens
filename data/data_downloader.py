@@ -308,3 +308,108 @@ class DataFetcher:
             except Exception as exc:
                 logger.error(f"Failed to process {symbol} on {self.exchange.capitalize()}: {exc}")
         logger.info(f"{self.exchange.capitalize()} download plan completed.")
+
+
+def get_resampled_df(df: pd.DataFrame, time_frame: str, resample_1m: bool = False):
+    """
+    Takes a raw OHLCV dataframe and resamples it to the given time_frame.
+    If resample_1m=True, also returns a 1-minute resampled version.
+    """
+    if df is None or df.empty:
+        return df, (df if resample_1m else None)
+        
+    agg_dict = {
+        'open': 'first',
+        'high': 'max',
+        'low': 'min',
+        'close': 'last',
+        'volume': 'sum'
+    }
+    
+    res_freq = PANDAS_FREQ.get(time_frame, time_frame)
+    resampled_df = df.resample(res_freq).agg(agg_dict).dropna()
+    
+    df_1m = None
+    if resample_1m:
+        freq_1m = PANDAS_FREQ.get("1m", "1min")
+        df_1m = df.resample(freq_1m).agg(agg_dict).dropna()
+        
+    return resampled_df, df_1m
+
+
+def get_updated_df(exchange: str, symbol: str, start, end, time_frame: str, resample_1m: bool = False):
+    """
+    Checks the database for data within the given time range.
+    Fetches missing data from API if necessary and combines it with DB data.
+    Does not update the database.
+    """
+    start_dt = pd.to_datetime(start)
+    end_dt = pd.to_datetime(end)
+    
+    engine = get_engine()
+    table_name = f"{exchange}_data.{exchange}_{symbol.lower()}"
+    
+    query = text(f"""
+        SELECT * FROM {table_name} 
+        WHERE date_time >= :start AND date_time <= :end
+        ORDER BY date_time ASC
+    """)
+    
+    try:
+        with engine.connect() as conn:
+            db_df = pd.read_sql(query, conn, params={"start": start_dt, "end": end_dt}, index_col="date_time")
+    except Exception as e:
+        logger.warning(f"Failed to read from DB: {e}")
+        db_df = pd.DataFrame()
+        
+    missing_ranges = []
+    if db_df.empty:
+        missing_ranges.append((start_dt, end_dt))
+    else:
+        db_start = db_df.index.min()
+        db_end = db_df.index.max()
+        from datetime import timedelta
+        delta = timedelta(minutes=1)
+        if db_start > start_dt:
+            missing_ranges.append((start_dt, db_start - delta))
+        if db_end < end_dt:
+            missing_ranges.append((db_end + delta, end_dt))
+            
+    api_dfs = []
+    if missing_ranges:
+        fetcher_config = {
+            "exchange": exchange,
+            "time_horizon": "1m",
+            "start_date": start_dt.strftime("%Y-%m-%d"),
+            "end_date": end_dt.strftime("%Y-%m-%d"),
+            "fill_missing_data": "interpolation",
+            "retries": 3,
+            "retry_delay": 5
+        }
+        fetcher = DataFetcher(fetcher_config)
+        
+        for m_start, m_end in missing_ranges:
+            if m_start >= m_end:
+                continue
+            if exchange == "binance":
+                df_part = fetcher._with_retry(fetcher._fetch_binance, symbol, m_start, m_end)
+            elif exchange == "bybit":
+                df_part = fetcher._with_retry(fetcher._fetch_bybit, symbol, m_start, m_end)
+            else:
+                continue
+                
+            if not df_part.empty:
+                api_dfs.append(df_part)
+                
+    if api_dfs:
+        api_df = pd.concat(api_dfs)
+        final_df = pd.concat([db_df, api_df])
+    else:
+        final_df = db_df
+        
+    if not final_df.empty:
+        final_df = final_df[~final_df.index.duplicated(keep="last")]
+        final_df.sort_index(inplace=True)
+        final_df = final_df[(final_df.index >= start_dt) & (final_df.index <= end_dt)]
+        
+    return get_resampled_df(final_df, time_frame, resample_1m)

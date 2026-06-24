@@ -49,7 +49,7 @@ INTERVAL_DELTAS = {
 }
 
 
-class DataDownloader:
+class DataFetcher:
     """Downloads OHLCV market data from exchange APIs with retry logic,
     incremental updates, and configurable missing-data handling."""
 
@@ -334,8 +334,11 @@ class DataDownloader:
 
     def download_all(self, symbols: list[str]) -> None:
         """Download data for every symbol in the list."""
+        logger.info(f"Starting {self.exchange.capitalize()} download plan for {len(symbols)} symbols.")
         for symbol in symbols:
             try:
                 self.download(symbol)
+                logger.info(f"Successfully finished processing {symbol} on {self.exchange.capitalize()}.")
             except Exception as exc:
-                logger.error(f"[{self.exchange}] {symbol}: failed – {exc}")
+                logger.error(f"Failed to process {symbol} on {self.exchange.capitalize()}: {exc}")
+        logger.info(f"{self.exchange.capitalize()} download plan completed.")

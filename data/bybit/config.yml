@@ -1,7 +1,9 @@
 # MarketLens - Bybit Exchange Configuration
 
+# Exchange
 exchange: bybit
 
+# Symbols / assets to collect data for
 symbols:
   - DOGE
   - SOL
@@ -12,12 +14,17 @@ symbols:
   - MINA
   - SUI
 
+
+# Time horizon (resolution) for the data
 time_horizon: "1d"
 
+# Date range for the data
 start_date: "2023-01-01"
 end_date: "today"  # Resolved dynamically at runtime to current date
 
+# Data processing
 fill_missing_data: "interpolation"
 
+# Retry configuration for network errors
 retries: 3
 retry_delay: 5  # seconds between retries

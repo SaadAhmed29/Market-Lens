@@ -12,41 +12,9 @@ import pandas as pd
 from sqlalchemy import text
 
 from utils.db import get_engine
+from utils.intervals import BYBIT_INTERVALS, PANDAS_FREQ, INTERVAL_DELTAS
 
 logger = logging.getLogger(__name__)
-
-# Mapping: config time_horizon → Binance interval string
-BINANCE_INTERVALS = {
-    "1m": "1m", "3m": "3m", "5m": "5m", "15m": "15m", "30m": "30m",
-    "1h": "1h", "2h": "2h", "4h": "4h", "6h": "6h", "8h": "8h", "12h": "12h",
-    "1d": "1d", "3d": "3d", "1w": "1w", "1M": "1M",
-}
-
-# Mapping: config time_horizon → Bybit interval string
-BYBIT_INTERVALS = {
-    "1m": "1", "3m": "3", "5m": "5", "15m": "15", "30m": "30",
-    "1h": "60", "2h": "120", "4h": "240", "6h": "360", "12h": "720",
-    "1d": "D", "1w": "W", "1M": "M",
-}
-
-# Mapping: config time_horizon → pandas frequency for resampling / gap detection
-PANDAS_FREQ = {
-    "1m": "1min", "3m": "3min", "5m": "5min", "15m": "15min", "30m": "30min",
-    "1h": "1h", "2h": "2h", "4h": "4h", "6h": "6h", "8h": "8h", "12h": "12h",
-    "1d": "1D", "3d": "3D", "1w": "1W", "1M": "1ME",
-}
-
-# Mapping: config time_horizon → timedelta for offset calculations
-INTERVAL_DELTAS = {
-    "1m": timedelta(minutes=1), "3m": timedelta(minutes=3),
-    "5m": timedelta(minutes=5), "15m": timedelta(minutes=15),
-    "30m": timedelta(minutes=30), "1h": timedelta(hours=1),
-    "2h": timedelta(hours=2), "4h": timedelta(hours=4),
-    "6h": timedelta(hours=6), "8h": timedelta(hours=8),
-    "12h": timedelta(hours=12), "1d": timedelta(days=1),
-    "3d": timedelta(days=3), "1w": timedelta(weeks=1),
-    "1M": timedelta(days=30),
-}
 
 
 class DataFetcher:
@@ -62,7 +30,7 @@ class DataFetcher:
         self.retries = config.get("retries", 3)
         self.retry_delay = config.get("retry_delay", 5)
 
-        self.engine = get_engine(self.exchange)
+        self.engine = get_engine()
         self._client = None  # lazily initialised
 
     # Client initialisation
@@ -86,8 +54,8 @@ class DataFetcher:
     # Database helpers
 
     def _table_name(self, symbol: str) -> str:
-        """Return the DB table name for a given symbol, e.g. ``binance_btc``."""
-        return f"{self.exchange}_{symbol.lower()}"
+        """Return the DB table name for a given symbol, e.g. ``binance_data.binance_btc``."""
+        return f"{self.exchange}_data.{self.exchange}_{symbol.lower()}"
 
     def _get_latest_datetime(self, table_name: str) -> datetime | None:
         """Return the most recent ``date_time`` stored in *table_name*, or None."""
@@ -119,9 +87,7 @@ class DataFetcher:
     def _fetch_binance(self, symbol: str, start_dt: datetime, end_dt: datetime) -> pd.DataFrame:
         """Fetch OHLCV candles from Binance via ``get_historical_klines``."""
         client = self._get_client()
-        interval = BINANCE_INTERVALS.get(self.time_horizon)
-        if interval is None:
-            raise ValueError(f"Unsupported time_horizon for Binance: {self.time_horizon}")
+        interval = self.time_horizon
 
         api_symbol = f"{symbol}USDT"
         start_str = start_dt.strftime("%d %b, %Y")

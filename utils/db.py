@@ -11,21 +11,12 @@ from sqlalchemy import create_engine, Column, Float, TIMESTAMP, MetaData, Table
 
 load_dotenv()  # reads .env from the project root
 
-EXCHANGES = {
-    "binance": {
-        "host": os.getenv("BINANCE_DB_HOST", "localhost"),
-        "port": os.getenv("BINANCE_DB_PORT", "5432"),
-        "name": os.getenv("BINANCE_DB_NAME", "binance_data"),
-        "user": os.getenv("BINANCE_DB_USER", ""),
-        "password": os.getenv("BINANCE_DB_PASSWORD", ""),
-    },
-    "bybit": {
-        "host": os.getenv("BYBIT_DB_HOST", "localhost"),
-        "port": os.getenv("BYBIT_DB_PORT", "5432"),
-        "name": os.getenv("BYBIT_DB_NAME", "bybit_data"),
-        "user": os.getenv("BYBIT_DB_USER", ""),
-        "password": os.getenv("BYBIT_DB_PASSWORD", ""),
-    },
+DB_CONFIG = {
+    "host": os.getenv("DB_HOST"),
+    "port": os.getenv("DB_PORT"),
+    "name": os.getenv("DB_NAME"),
+    "user": os.getenv("DB_USER"),
+    "password": os.getenv("DB_PASSWORD"),
 }
 
 SYMBOLS = ["DOGE", "SOL", "BTC", "ETH", "ADA", "LTC", "MINA", "SUI"]
@@ -40,19 +31,9 @@ def _build_url(cfg: dict) -> str:
     )
 
 
-def get_engine(exchange: str):
-    """Return a SQLAlchemy engine for the given exchange.
-
-    Parameters
-    ----------
-    exchange : str
-        One of ``"binance"`` or ``"bybit"``.
-    """
-    if exchange not in EXCHANGES:
-        raise ValueError(
-            f"Unknown exchange '{exchange}'. Expected one of {list(EXCHANGES)}"
-        )
-    return create_engine(_build_url(EXCHANGES[exchange]))
+def get_engine():
+    """Return a SQLAlchemy engine for the database."""
+    return create_engine(_build_url(DB_CONFIG))
 
 
 def _define_tables(metadata: MetaData, exchange: str) -> list[Table]:
@@ -64,6 +45,7 @@ def _define_tables(metadata: MetaData, exchange: str) -> list[Table]:
     tables = []
     for symbol in SYMBOLS:
         table_name = f"{exchange}_{symbol.lower()}"
+        schema_name = f"{exchange}_data"
         table = Table(
             table_name,
             metadata,
@@ -73,6 +55,7 @@ def _define_tables(metadata: MetaData, exchange: str) -> list[Table]:
             Column("low", Float),
             Column("close", Float),
             Column("volume", Float),
+            schema=schema_name,
             extend_existing=True,
         )
         tables.append(table)
@@ -81,19 +64,43 @@ def _define_tables(metadata: MetaData, exchange: str) -> list[Table]:
 
 # Public API
 
+def create_database_if_not_exists():
+    """Create the database if it does not exist."""
+    from sqlalchemy import text
+    default_config = DB_CONFIG.copy()
+    db_name = default_config["name"]
+    default_config["name"] = "postgres"
+    
+    engine = create_engine(_build_url(default_config), isolation_level="AUTOCOMMIT")
+    with engine.connect() as conn:
+        result = conn.execute(text(f"SELECT 1 FROM pg_database WHERE datname = '{db_name}'"))
+        if not result.fetchone():
+            conn.execute(text(f"CREATE DATABASE {db_name}"))
+            print(f"[v] Created database '{db_name}'")
+    engine.dispose()
+
 def create_all_tables() -> None:
-    """Connect to both exchange databases and create all tables.
+    """Connect to the database and create all schemas and tables.
 
     Tables that already exist are silently skipped thanks to
     ``checkfirst=True`` (the default for ``metadata.create_all``).
     """
-    for exchange, cfg in EXCHANGES.items():
-        engine = create_engine(_build_url(cfg))
-        metadata = MetaData()
+    from sqlalchemy import text
+    create_database_if_not_exists()
+    
+    engine = get_engine()
+    metadata = MetaData()
+    
+    with engine.begin() as conn:
+        for exchange in ["binance", "bybit"]:
+            conn.execute(text(f"CREATE SCHEMA IF NOT EXISTS {exchange}_data"))
+            
+    for exchange in ["binance", "bybit"]:
         _define_tables(metadata, exchange)
-        metadata.create_all(engine)
-        engine.dispose()
-        print(f"[✓] Tables ensured for '{exchange}' ({cfg['name']})")
+        
+    metadata.create_all(engine)
+    engine.dispose()
+    print("[v] Schemas and tables ensured for both exchanges in Market-Lens database.")
 
 
 if __name__ == "__main__":

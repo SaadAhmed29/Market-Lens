@@ -1,12 +1,15 @@
 """
-MarketLens - Database Schema
-Defines per-symbol OHLCV tables for each exchange and handles table creation
-against the binance_data and bybit_data PostgreSQL databases.
+MarketLens - Database Utilities
+Defines per-symbol OHLCV tables for each exchange, handles table creation,
+and provides helper functions for querying and inserting candle data.
 """
 
 import os
+from datetime import datetime
+
+import pandas as pd
 from dotenv import load_dotenv
-from sqlalchemy import create_engine, Column, Float, TIMESTAMP, MetaData, Table
+from sqlalchemy import create_engine, text, Column, Float, TIMESTAMP, MetaData, Table
 
 
 load_dotenv()  # reads .env from the project root
@@ -21,7 +24,7 @@ DB_CONFIG = {
 
 SYMBOLS = ["DOGE", "SOL", "BTC", "ETH", "ADA", "LTC", "MINA", "SUI"]
 
-# Helpers
+# Connection helpers
 
 def _build_url(cfg: dict) -> str:
     """Build a PostgreSQL connection URL from a config dict."""
@@ -34,6 +37,40 @@ def _build_url(cfg: dict) -> str:
 def get_engine():
     """Return a SQLAlchemy engine for the database."""
     return create_engine(_build_url(DB_CONFIG))
+
+
+# Data helpers
+
+def table_name(exchange: str, symbol: str) -> str:
+    """Return the DB table name for a given symbol, e.g. ``binance_data.btc_1m``."""
+    return f"{exchange}_data.{symbol.lower()}_1m"
+
+
+def get_latest_datetime(engine, tbl_name: str) -> datetime | None:
+    """Return the most recent ``date_time`` stored in *tbl_name*, or None."""
+    query = text(f"SELECT MAX(date_time) FROM {tbl_name}")
+    with engine.connect() as conn:
+        result = conn.execute(query).scalar()
+    return result
+
+
+def insert_rows(engine, df: pd.DataFrame, tbl_name: str) -> int:
+    """Insert DataFrame rows into *tbl_name*, silently skipping duplicates."""
+    if df.empty:
+        return 0
+
+    insert_sql = text(
+        f"INSERT INTO {tbl_name} "
+        f"(date_time, open, high, low, close, volume) "
+        f"VALUES (:date_time, :open, :high, :low, :close, :volume) "
+        f"ON CONFLICT (date_time) DO NOTHING"
+    )
+
+    records = df.reset_index().to_dict("records")
+    with engine.begin() as conn:
+        conn.execute(insert_sql, records)
+
+    return len(records)
 
 
 def _define_tables(metadata: MetaData, exchange: str) -> list[Table]:

@@ -11,7 +11,9 @@ from datetime import datetime, timedelta, timezone
 import pandas as pd
 from sqlalchemy import text
 
-from utils.db import get_engine
+from data.binance.exchange import fetch_binance
+from data.bybit.exchange import fetch_bybit
+from utils.db import get_engine, table_name, get_latest_datetime, insert_rows
 from utils.intervals import BYBIT_INTERVALS, PANDAS_FREQ, INTERVAL_DELTAS
 
 logger = logging.getLogger(__name__)
@@ -51,136 +53,19 @@ class DataFetcher:
 
         return self._client
 
-    # Database helpers
-
-    def _table_name(self, symbol: str) -> str:
-        """Return the DB table name for a given symbol, e.g. ``binance_data.btc_1m``."""
-        return f"{self.exchange}_data.{symbol.lower()}_1m"
-
-    def _get_latest_datetime(self, table_name: str) -> datetime | None:
-        """Return the most recent ``date_time`` stored in *table_name*, or None."""
-        query = text(f"SELECT MAX(date_time) FROM {table_name}")
-        with self.engine.connect() as conn:
-            result = conn.execute(query).scalar()
-        return result
-
-    def _insert_rows(self, df: pd.DataFrame, table_name: str) -> int:
-        """Insert DataFrame rows into *table_name*, silently skipping duplicates."""
-        if df.empty:
-            return 0
-
-        insert_sql = text(
-            f"INSERT INTO {table_name} "
-            f"(date_time, open, high, low, close, volume) "
-            f"VALUES (:date_time, :open, :high, :low, :close, :volume) "
-            f"ON CONFLICT (date_time) DO NOTHING"
-        )
-
-        records = df.reset_index().to_dict("records")
-        with self.engine.begin() as conn:
-            conn.execute(insert_sql, records)
-
-        return len(records)
-
-    # Fetch: Binance
+    # Exchange fetch dispatchers
 
     def _fetch_binance(self, symbol: str, start_dt: datetime, end_dt: datetime) -> pd.DataFrame:
         """Fetch OHLCV candles from Binance via ``get_historical_klines``."""
-        client = self._get_client()
-        interval = self.time_horizon
-
-        api_symbol = f"{symbol}USDT"
-        start_str = start_dt.strftime("%d %b, %Y")
-        end_str = end_dt.strftime("%d %b, %Y")
-
-        klines = client.get_historical_klines(
-            symbol=api_symbol,
-            interval=interval,
-            start_str=start_str,
-            end_str=end_str,
-        )
-
-        if not klines:
-            return pd.DataFrame()
-
-        # kline layout: [OpenTime, Open, High, Low, Close, Volume, ...]
-        records = []
-        for k in klines:
-            records.append({
-                "date_time": datetime.utcfromtimestamp(k[0] / 1000).replace(tzinfo=timezone.utc),
-                "open": float(k[1]),
-                "high": float(k[2]),
-                "low": float(k[3]),
-                "close": float(k[4]),
-                "volume": float(k[5]),
-            })
-
-        df = pd.DataFrame(records)
-        df.set_index("date_time", inplace=True)
-        df.sort_index(inplace=True)
-        return df
-
-    # Fetch: Bybit
+        return fetch_binance(self._get_client(), symbol, self.time_horizon, start_dt, end_dt)
 
     def _fetch_bybit(self, symbol: str, start_dt: datetime, end_dt: datetime) -> pd.DataFrame:
         """Fetch OHLCV candles from Bybit via ``get_kline``, with pagination."""
-        client = self._get_client()
         interval = BYBIT_INTERVALS.get(self.time_horizon)
         if interval is None:
             raise ValueError(f"Unsupported time_horizon for Bybit: {self.time_horizon}")
-
-        api_symbol = f"{symbol}USDT"
-        start_ms = int(start_dt.timestamp() * 1000)
-        end_ms = int(end_dt.timestamp() * 1000)
-        delta_ms = int(INTERVAL_DELTAS[self.time_horizon].total_seconds() * 1000)
-
-        all_records: list[dict] = []
-        current_start = start_ms
-
-        while current_start < end_ms:
-            response = client.get_kline(
-                category="spot",
-                symbol=api_symbol,
-                interval=interval,
-                start=current_start,
-                end=end_ms,
-                limit=1000,
-            )
-
-            result_list = response.get("result", {}).get("list", [])
-            if not result_list:
-                break
-
-            # Bybit returns newest-first — reverse for chronological order
-            result_list = list(reversed(result_list))
-
-            for k in result_list:
-                ts = datetime.utcfromtimestamp(int(k[0]) / 1000).replace(tzinfo=timezone.utc)
-                all_records.append({
-                    "date_time": ts,
-                    "open": float(k[1]),
-                    "high": float(k[2]),
-                    "low": float(k[3]),
-                    "close": float(k[4]),
-                    "volume": float(k[5]),
-                })
-
-            # Advance past the newest candle we received
-            newest_ts = int(result_list[-1][0])
-            current_start = newest_ts + delta_ms
-
-            # Fewer than 1000 results means we've reached the end
-            if len(result_list) < 1000:
-                break
-
-        if not all_records:
-            return pd.DataFrame()
-
-        df = pd.DataFrame(all_records)
-        df.set_index("date_time", inplace=True)
-        df = df[~df.index.duplicated(keep="first")]
-        df.sort_index(inplace=True)
-        return df
+        delta = INTERVAL_DELTAS[self.time_horizon]
+        return fetch_bybit(self._get_client(), symbol, interval, start_dt, end_dt, delta)
 
     # Missing-data handling
 
@@ -249,10 +134,10 @@ class DataFetcher:
         4. Fill missing rows according to ``fill_missing_data`` config.
         5. Insert into the correct table.
         """
-        table_name = self._table_name(symbol)
+        tbl_name = table_name(self.exchange, symbol)
 
         # Determine effective start: resume from where we left off
-        latest_dt = self._get_latest_datetime(table_name)
+        latest_dt = get_latest_datetime(self.engine, tbl_name)
 
         if latest_dt is not None:
             if latest_dt.tzinfo is None:
@@ -260,10 +145,10 @@ class DataFetcher:
             effective_start = latest_dt
             is_incremental = True
         else:
-            effective_start = datetime.strptime(self.start_date, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+            effective_start = pd.to_datetime(self.start_date, utc=True).to_pydatetime()
             is_incremental = False
 
-        end_dt = datetime.strptime(self.end_date, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+        end_dt = pd.to_datetime(self.end_date, utc=True).to_pydatetime()
 
         # Already up to date?
         if effective_start >= end_dt:
@@ -315,7 +200,7 @@ class DataFetcher:
         df = df.round(4)
 
         # Insert into PostgreSQL
-        rows = self._insert_rows(df, table_name)
+        rows = insert_rows(self.engine, df, tbl_name)
         logger.info(f"[{self.exchange}] {symbol}: inserted {rows} rows.")
 
     def download_all(self, symbols: list[str]) -> None:
@@ -329,115 +214,116 @@ class DataFetcher:
                 logger.error(f"Failed to process {symbol} on {self.exchange.capitalize()}: {exc}")
         logger.info(f"{self.exchange.capitalize()} download plan completed.")
 
+    # DataFrame helpers
 
-def get_resampled_df(df: pd.DataFrame, time_frame: str, resample_1m: bool = False):
-    """
-    Takes a raw OHLCV dataframe and resamples it to the given time_frame.
-    If resample_1m=True, also returns a 1-minute resampled version.
-    """
-    if df is None or df.empty:
-        return df, (df if resample_1m else None)
-        
-    agg_dict = {
-        'open': 'first',
-        'high': 'max',
-        'low': 'min',
-        'close': 'last',
-        'volume': 'mean'
-    }
-    
-    res_freq = PANDAS_FREQ.get(time_frame, time_frame)
-    resampled_df = df.resample(res_freq).agg(agg_dict).dropna().round(4)
-    
-    df_1m = None
-    if resample_1m:
-        freq_1m = PANDAS_FREQ.get("1m", "1min")
-        df_1m = df.resample(freq_1m).agg(agg_dict).dropna().round(4)
-        
-    return resampled_df, df_1m
-
-
-def get_updated_df(exchange: str, symbol: str, start, end, time_frame: str, resample_1m: bool = False):
-    """
-    Checks the database for data within the given time range.
-    Fetches missing data from API if necessary and combines it with DB data.
-    Does not update the database.
-    """
-    start_dt = pd.to_datetime(start, utc=True)
-    end_dt = pd.to_datetime(end, utc=True)
-    
-    engine = get_engine()
-    table_name = f"{exchange}_data.{symbol.lower()}_1m"
-    
-    query = text(f"""
-        SELECT * FROM {table_name} 
-        WHERE date_time >= :start AND date_time <= :end
-        ORDER BY date_time ASC
-    """)
-    
-    try:
-        with engine.connect() as conn:
-            db_df = pd.read_sql(query, conn, params={"start": start_dt, "end": end_dt}, index_col="date_time")
-            if not db_df.empty:
-                db_df.index = pd.to_datetime(db_df.index, utc=True)
-    except Exception as e:
-        logger.warning(f"Failed to read from DB: {e}")
-        db_df = pd.DataFrame()
-        
-    missing_ranges = []
-    if db_df.empty:
-        from datetime import timedelta
-        delta = timedelta(minutes=1)
-        missing_ranges.append((start_dt - delta, end_dt))
-    else:
-        db_start = db_df.index.min()
-        db_end = db_df.index.max()
-        from datetime import timedelta
-        delta = timedelta(minutes=1)
-        if db_start > start_dt:
-            missing_ranges.append((start_dt - delta, db_start - delta))
-        if db_end < end_dt:
-            missing_ranges.append((db_end, end_dt))
+    @staticmethod
+    def get_resampled_df(df: pd.DataFrame, time_frame: str, resample_1m: bool = False):
+        """
+        Takes a raw OHLCV dataframe and resamples it to the given time_frame.
+        If resample_1m=True, also returns a 1-minute resampled version.
+        """
+        if df is None or df.empty:
+            return df, (df if resample_1m else None)
             
-    api_dfs = []
-    if missing_ranges:
-        fetcher_config = {
-            "exchange": exchange,
-            "time_horizon": "1m",
-            "start_date": start_dt.strftime("%Y-%m-%d"),
-            "end_date": end_dt.strftime("%Y-%m-%d"),
-            "fill_missing_data": "interpolation",
-            "retries": 3,
-            "retry_delay": 5
+        agg_dict = {
+            'open': 'first',
+            'high': 'max',
+            'low': 'min',
+            'close': 'last',
+            'volume': 'mean'
         }
-        fetcher = DataFetcher(fetcher_config)
         
-        for m_start, m_end in missing_ranges:
-            if m_start >= m_end:
-                continue
-            if exchange == "binance":
-                df_part = fetcher._with_retry(fetcher._fetch_binance, symbol, m_start, m_end)
-            elif exchange == "bybit":
-                df_part = fetcher._with_retry(fetcher._fetch_bybit, symbol, m_start, m_end)
-            else:
-                continue
+        res_freq = PANDAS_FREQ.get(time_frame, time_frame)
+        resampled_df = df.resample(res_freq).agg(agg_dict).dropna().round(4)
+        
+        df_1m = None
+        if resample_1m:
+            freq_1m = PANDAS_FREQ.get("1m", "1min")
+            df_1m = df.resample(freq_1m).agg(agg_dict).dropna().round(4)
+            
+        return resampled_df, df_1m
+
+    @staticmethod
+    def get_updated_df(exchange: str, symbol: str, start, end,
+                       time_frame: str, resample_1m: bool = False):
+        """
+        Checks the database for data within the given time range.
+        Fetches missing data from API if necessary and combines it with DB data.
+        Does not update the database.
+        """
+        start_dt = pd.to_datetime(start, utc=True)
+        end_dt = pd.to_datetime(end, utc=True)
+        
+        engine = get_engine()
+        tbl_name = table_name(exchange, symbol)
+        
+        query = text(f"""
+            SELECT * FROM {tbl_name} 
+            WHERE date_time >= :start AND date_time <= :end
+            ORDER BY date_time ASC
+        """)
+        
+        try:
+            with engine.connect() as conn:
+                db_df = pd.read_sql(query, conn, params={"start": start_dt, "end": end_dt}, index_col="date_time")
+                if not db_df.empty:
+                    db_df.index = pd.to_datetime(db_df.index, utc=True)
+        except Exception as e:
+            logger.warning(f"Failed to read from DB: {e}")
+            db_df = pd.DataFrame()
+            
+        missing_ranges = []
+        if db_df.empty:
+            delta = timedelta(minutes=1)
+            missing_ranges.append((start_dt - delta, end_dt))
+        else:
+            db_start = db_df.index.min()
+            db_end = db_df.index.max()
+            delta = timedelta(minutes=1)
+            if db_start > start_dt:
+                missing_ranges.append((start_dt - delta, db_start - delta))
+            if db_end < end_dt:
+                missing_ranges.append((db_end, end_dt))
                 
-            if not df_part.empty:
-                df_part['volume'] = df_part['volume'].pct_change().fillna(0.0)
-                df_part = df_part[df_part.index > m_start]
+        api_dfs = []
+        if missing_ranges:
+            fetcher_config = {
+                "exchange": exchange,
+                "time_horizon": "1m",
+                "start_date": start_dt.strftime("%Y-%m-%d"),
+                "end_date": end_dt.strftime("%Y-%m-%d"),
+                "fill_missing_data": "interpolation",
+                "retries": 3,
+                "retry_delay": 5
+            }
+            fetcher = DataFetcher(fetcher_config)
+            
+            for m_start, m_end in missing_ranges:
+                if m_start >= m_end:
+                    continue
+                if exchange == "binance":
+                    df_part = fetcher._with_retry(fetcher._fetch_binance, symbol, m_start, m_end)
+                elif exchange == "bybit":
+                    df_part = fetcher._with_retry(fetcher._fetch_bybit, symbol, m_start, m_end)
+                else:
+                    continue
+                    
                 if not df_part.empty:
-                    api_dfs.append(df_part)
-                
-    if api_dfs:
-        api_df = pd.concat(api_dfs)
-        final_df = pd.concat([db_df, api_df])
-    else:
-        final_df = db_df
-        
-    if not final_df.empty:
-        final_df = final_df[~final_df.index.duplicated(keep="last")]
-        final_df.sort_index(inplace=True)
-        final_df = final_df[(final_df.index >= start_dt) & (final_df.index <= end_dt)]
-        final_df = final_df.round(4)
-        
-    return get_resampled_df(final_df, time_frame, resample_1m)
+                    df_part['volume'] = df_part['volume'].pct_change().fillna(0.0)
+                    df_part = df_part[df_part.index > m_start]
+                    if not df_part.empty:
+                        api_dfs.append(df_part)
+                    
+        if api_dfs:
+            api_df = pd.concat(api_dfs)
+            final_df = pd.concat([db_df, api_df])
+        else:
+            final_df = db_df
+            
+        if not final_df.empty:
+            final_df = final_df[~final_df.index.duplicated(keep="last")]
+            final_df.sort_index(inplace=True)
+            final_df = final_df[(final_df.index >= start_dt) & (final_df.index <= end_dt)]
+            final_df = final_df.round(4)
+            
+        return DataFetcher.get_resampled_df(final_df, time_frame, resample_1m)

@@ -14,14 +14,14 @@ def fetch_binance(client, symbol: str, interval: str,
     """Fetch OHLCV candles from Binance via ``get_historical_klines``."""
 
     api_symbol = f"{symbol}USDT"
-    start_str = start_dt.strftime("%d %b, %Y")
-    end_str = end_dt.strftime("%d %b, %Y")
+    start_ms = int(start_dt.timestamp() * 1000)
+    end_ms = int(end_dt.timestamp() * 1000)
 
     klines = client.get_historical_klines(
         symbol=api_symbol,
         interval=interval,
-        start_str=start_str,
-        end_str=end_str,
+        start_str=start_ms,
+        end_str=end_ms,
     )
 
     if not klines:

@@ -23,12 +23,15 @@ def fetch_bybit(client, symbol: str, interval: str,
     current_start = start_ms
 
     while current_start < end_ms:
+        # Window the request to fetch forward in chunks
+        chunk_end = min(current_start + (1000 * delta_ms), end_ms)
+
         response = client.get_kline(
             category="spot",
             symbol=api_symbol,
             interval=interval,
             start=current_start,
-            end=end_ms,
+            end=chunk_end,
             limit=1000,
         )
 
@@ -54,8 +57,11 @@ def fetch_bybit(client, symbol: str, interval: str,
         newest_ts = int(result_list[-1][0])
         current_start = newest_ts + delta_ms
 
-        # Fewer than 1000 results means we've reached the end
+        # Fewer than 1000 results means we've exhausted this chunk
         if len(result_list) < 1000:
+            # If we haven't reached the overall end, continue from the next chunk
+            if current_start < end_ms:
+                continue
             break
 
     if not all_records:

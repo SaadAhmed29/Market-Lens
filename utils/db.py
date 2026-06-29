@@ -54,6 +54,14 @@ def get_latest_datetime(engine, tbl_name: str) -> datetime | None:
     return result
 
 
+def get_earliest_datetime(engine, tbl_name: str) -> datetime | None:
+    """Return the earliest ``date_time`` stored in *tbl_name*, or None."""
+    query = text(f"SELECT MIN(date_time) FROM {tbl_name}")
+    with engine.connect() as conn:
+        result = conn.execute(query).scalar()
+    return result
+
+
 def insert_rows(engine, df: pd.DataFrame, tbl_name: str) -> int:
     """Insert DataFrame rows into *tbl_name*, silently skipping duplicates."""
     if df.empty:
@@ -71,6 +79,20 @@ def insert_rows(engine, df: pd.DataFrame, tbl_name: str) -> int:
         conn.execute(insert_sql, records)
 
     return len(records)
+
+
+def reorder_table(engine, tbl_name: str) -> None:
+    """Physically reorder *tbl_name* rows by ``date_time`` using CLUSTER.
+
+    This ensures that rows inserted out of chronological order (e.g. backfill)
+    are stored on disk in the correct time sequence.
+    """
+    # tbl_name is "schema.table", e.g. "bybit_data.doge_1m"
+    # The PK index name is "<table>_pkey"
+    bare_table = tbl_name.split(".")[-1]
+    index_name = f"{bare_table}_pkey"
+    with engine.begin() as conn:
+        conn.execute(text(f"CLUSTER {tbl_name} USING {index_name}"))
 
 
 def _define_tables(metadata: MetaData, exchange: str) -> list[Table]:

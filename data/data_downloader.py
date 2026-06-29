@@ -13,7 +13,7 @@ from sqlalchemy import text
 
 from data.binance.exchange import fetch_binance
 from data.bybit.exchange import fetch_bybit
-from utils.db import get_engine, table_name, get_latest_datetime, insert_rows
+from utils.db import get_engine, table_name, get_latest_datetime, get_earliest_datetime, insert_rows, reorder_table
 from utils.intervals import BYBIT_INTERVALS, PANDAS_FREQ, INTERVAL_DELTAS
 
 logger = logging.getLogger(__name__)
@@ -128,80 +128,97 @@ class DataFetcher:
     def download(self, symbol: str) -> None:
         """Download OHLCV data for a single symbol with incremental updates.
 
-        1. Query the DB for the latest stored ``date_time``.
-        2. Fetch only newer candles from the exchange API.
-        3. Drop the last row (incomplete candle).
-        4. Fill missing rows according to ``fill_missing_data`` config.
-        5. Insert into the correct table.
+        1. Query the DB for both the earliest and latest stored ``date_time``.
+        2. If the earliest DB record is after the configured start_date,
+           fetch the missing earlier portion from the API.
+        3. If there are newer candles available after the latest DB record,
+           fetch those as well.
+        4. Drop the last row (incomplete candle).
+        5. Fill missing rows according to ``fill_missing_data`` config.
+        6. Insert into the correct table.
         """
         tbl_name = table_name(self.exchange, symbol)
-
-        # Determine effective start: resume from where we left off
-        latest_dt = get_latest_datetime(self.engine, tbl_name)
-
-        if latest_dt is not None:
-            if latest_dt.tzinfo is None:
-                latest_dt = latest_dt.replace(tzinfo=timezone.utc)
-            effective_start = latest_dt
-            is_incremental = True
-        else:
-            effective_start = pd.to_datetime(self.start_date, utc=True).to_pydatetime()
-            is_incremental = False
-
+        configured_start = pd.to_datetime(self.start_date, utc=True).to_pydatetime()
         end_dt = pd.to_datetime(self.end_date, utc=True).to_pydatetime()
 
-        # Already up to date?
-        if effective_start >= end_dt:
+        # Query both boundaries of existing DB data
+        latest_dt = get_latest_datetime(self.engine, tbl_name)
+        earliest_dt = get_earliest_datetime(self.engine, tbl_name)
+
+        # Build a list of (start, end) ranges that need fetching
+        fetch_ranges = []
+
+        if latest_dt is None:
+            # No data at all — fetch the full range
+            fetch_ranges.append((configured_start, end_dt))
+        else:
+            if latest_dt.tzinfo is None:
+                latest_dt = latest_dt.replace(tzinfo=timezone.utc)
+            if earliest_dt is not None and earliest_dt.tzinfo is None:
+                earliest_dt = earliest_dt.replace(tzinfo=timezone.utc)
+
+            # Check start boundary: if DB starts after configured start, fetch the gap
+            if earliest_dt is not None and earliest_dt > configured_start:
+                fetch_ranges.append((configured_start, earliest_dt))
+                logger.info(
+                    f"[{self.exchange}] {symbol}: "
+                    f"DB starts at {earliest_dt}, but config starts at {configured_start}. "
+                    f"Fetching earlier portion."
+                )
+
+            # Check end boundary: if DB ends before end_dt, fetch the gap
+            if latest_dt < end_dt:
+                fetch_ranges.append((latest_dt, end_dt))
+
+        if not fetch_ranges:
             logger.info(f"[{self.exchange}] {symbol}: already up to date.")
             return
 
-        logger.info(
-            f"[{self.exchange}] {symbol}: "
-            f"fetching {effective_start.date()} -> {end_dt.date()} ..."
-        )
+        total_inserted = 0
+        for range_start, range_end in fetch_ranges:
+            if range_start >= range_end:
+                continue
 
-        # Fetch with retries
-        if self.exchange == "binance":
-            df = self._with_retry(self._fetch_binance, symbol, effective_start, end_dt)
-        elif self.exchange == "bybit":
-            df = self._with_retry(self._fetch_bybit, symbol, effective_start, end_dt)
-        else:
-            raise ValueError(f"Unsupported exchange: {self.exchange}")
+            logger.info(
+                f"[{self.exchange}] {symbol}: "
+                f"fetching {range_start} -> {range_end} ..."
+            )
 
-        if df.empty:
-            logger.info(f"[{self.exchange}] {symbol}: no new data returned.")
-            return
+            # Fetch with retries
+            if self.exchange == "binance":
+                df = self._with_retry(self._fetch_binance, symbol, range_start, range_end)
+            elif self.exchange == "bybit":
+                df = self._with_retry(self._fetch_bybit, symbol, range_start, range_end)
+            else:
+                raise ValueError(f"Unsupported exchange: {self.exchange}")
 
-        # Drop last row (incomplete candle)
-        df = df.iloc[:-1]
+            if df.empty:
+                logger.info(f"[{self.exchange}] {symbol}: no new data returned for range.")
+                continue
 
-        if df.empty:
-            logger.info(f"[{self.exchange}] {symbol}: no complete candles.")
-            return
+            # Drop last row (incomplete candle)
+            df = df.iloc[:-1]
 
-        # Compute volume percentage change
-        df['volume'] = df['volume'].pct_change()
-        
-        if is_incremental:
-            # Drop the overlapping candle we used just for pct_change reference
-            df = df.iloc[1:]
-        else:
-            # First fetch ever, set first pct_change to 0
-            df.loc[df.index[0], 'volume'] = 0.0
+            if df.empty:
+                logger.info(f"[{self.exchange}] {symbol}: no complete candles.")
+                continue
 
-        if df.empty:
-            logger.info(f"[{self.exchange}] {symbol}: no new data after processing volume.")
-            return
+            # Fill missing data
+            df = self._fill_missing(df)
+
+            # Round everything to 4 decimal places
+            df = df.round(4)
+
+            # Insert into PostgreSQL
+            rows = insert_rows(self.engine, df, tbl_name)
+            total_inserted += rows
+            logger.info(f"[{self.exchange}] {symbol}: inserted {rows} rows for range.")
+
+        if total_inserted > 0:
+            reorder_table(self.engine, tbl_name)
+            logger.info(f"[{self.exchange}] {symbol}: table reordered by primary key.")
             
-        # Fill missing data
-        df = self._fill_missing(df)
-        
-        # Round everything to 4 decimal places
-        df = df.round(4)
-
-        # Insert into PostgreSQL
-        rows = insert_rows(self.engine, df, tbl_name)
-        logger.info(f"[{self.exchange}] {symbol}: inserted {rows} rows.")
+        logger.info(f"[{self.exchange}] {symbol}: total inserted {total_inserted} rows.")
 
     def download_all(self, symbols: list[str]) -> None:
         """Download data for every symbol in the list."""
@@ -230,7 +247,7 @@ class DataFetcher:
             'high': 'max',
             'low': 'min',
             'close': 'last',
-            'volume': 'mean'
+            'volume': 'sum'
         }
         
         res_freq = PANDAS_FREQ.get(time_frame, time_frame)
@@ -309,7 +326,6 @@ class DataFetcher:
                     continue
                     
                 if not df_part.empty:
-                    df_part['volume'] = df_part['volume'].pct_change().fillna(0.0)
                     df_part = df_part[df_part.index > m_start]
                     if not df_part.empty:
                         api_dfs.append(df_part)

@@ -475,3 +475,225 @@ class TalibIndicators:
         close = self.df['close'].values
         res = talib.TRANGE(high, low, close)
         return pd.Series(res, index=self.df.index, name='TRANGE')
+
+    # STATISTIC FUNCTIONS
+
+    def beta(self, timeperiod=5) -> pd.Series:
+        """Beta"""
+        high = self.df['high'].values
+        low = self.df['low'].values
+        res = talib.BETA(high, low, timeperiod=timeperiod)
+        return pd.Series(res, index=self.df.index, name='BETA')
+
+    def correl(self, timeperiod=30) -> pd.Series:
+        """Pearson's Correlation Coefficient (r)"""
+        high = self.df['high'].values
+        low = self.df['low'].values
+        res = talib.CORREL(high, low, timeperiod=timeperiod)
+        return pd.Series(res, index=self.df.index, name='CORREL')
+
+    def linearreg(self, timeperiod=14) -> pd.Series:
+        """Linear Regression"""
+        close = self.df['close'].values
+        res = talib.LINEARREG(close, timeperiod=timeperiod)
+        return pd.Series(res, index=self.df.index, name='LINEARREG')
+
+    def linearreg_angle(self, timeperiod=14) -> pd.Series:
+        """Linear Regression Angle"""
+        close = self.df['close'].values
+        res = talib.LINEARREG_ANGLE(close, timeperiod=timeperiod)
+        return pd.Series(res, index=self.df.index, name='LINEARREG_ANGLE')
+
+    def linearreg_intercept(self, timeperiod=14) -> pd.Series:
+        """Linear Regression Intercept"""
+        close = self.df['close'].values
+        res = talib.LINEARREG_INTERCEPT(close, timeperiod=timeperiod)
+        return pd.Series(res, index=self.df.index, name='LINEARREG_INTERCEPT')
+
+    def linearreg_slope(self, timeperiod=14) -> pd.Series:
+        """Linear Regression Slope"""
+        close = self.df['close'].values
+        res = talib.LINEARREG_SLOPE(close, timeperiod=timeperiod)
+        return pd.Series(res, index=self.df.index, name='LINEARREG_SLOPE')
+
+    def stddev(self, timeperiod=5, nbdev=1) -> pd.Series:
+        """Standard Deviation"""
+        close = self.df['close'].values
+        res = talib.STDDEV(close, timeperiod=timeperiod, nbdev=nbdev)
+        return pd.Series(res, index=self.df.index, name='STDDEV')
+
+    def tsf(self, timeperiod=14) -> pd.Series:
+        """Time Series Forecast"""
+        close = self.df['close'].values
+        res = talib.TSF(close, timeperiod=timeperiod)
+        return pd.Series(res, index=self.df.index, name='TSF')
+
+    def var(self, timeperiod=5, nbdev=1) -> pd.Series:
+        """Variance"""
+        close = self.df['close'].values
+        res = talib.VAR(close, timeperiod=timeperiod, nbdev=nbdev)
+        return pd.Series(res, index=self.df.index, name='VAR')
+
+    # MATH TRANSFORM
+
+    def acos(self) -> pd.Series:
+        """Vector Trigonometric ACos"""
+        close = self.df['close'].values
+        res = talib.ACOS(close)
+        return pd.Series(res, index=self.df.index, name='ACOS')
+
+    def asin(self) -> pd.Series:
+        """Vector Trigonometric ASin"""
+        close = self.df['close'].values
+        res = talib.ASIN(close)
+        return pd.Series(res, index=self.df.index, name='ASIN')
+
+    def atan(self) -> pd.Series:
+        """Vector Trigonometric ATan"""
+        close = self.df['close'].values
+        res = talib.ATAN(close)
+        return pd.Series(res, index=self.df.index, name='ATAN')
+
+    def ceil(self) -> pd.Series:
+        """Vector Ceil"""
+        close = self.df['close'].values
+        res = talib.CEIL(close)
+        return pd.Series(res, index=self.df.index, name='CEIL')
+
+    def cos(self) -> pd.Series:
+        """Vector Trigonometric Cos"""
+        close = self.df['close'].values
+        res = talib.COS(close)
+        return pd.Series(res, index=self.df.index, name='COS')
+
+    def cosh(self) -> pd.Series:
+        """Vector Trigonometric Cosh"""
+        close = self.df['close'].values
+        res = talib.COSH(close)
+        return pd.Series(res, index=self.df.index, name='COSH')
+
+    def exp(self) -> pd.Series:
+        """Vector Arithmetic Exp"""
+        close = self.df['close'].values
+        res = talib.EXP(close)
+        return pd.Series(res, index=self.df.index, name='EXP')
+
+    def floor(self) -> pd.Series:
+        """Vector Floor"""
+        close = self.df['close'].values
+        res = talib.FLOOR(close)
+        return pd.Series(res, index=self.df.index, name='FLOOR')
+
+    def ln(self) -> pd.Series:
+        """Vector Log Natural"""
+        close = self.df['close'].values
+        res = talib.LN(close)
+        return pd.Series(res, index=self.df.index, name='LN')
+
+    def log10(self) -> pd.Series:
+        """Vector Log10"""
+        close = self.df['close'].values
+        res = talib.LOG10(close)
+        return pd.Series(res, index=self.df.index, name='LOG10')
+
+    def sin(self) -> pd.Series:
+        """Vector Trigonometric Sin"""
+        close = self.df['close'].values
+        res = talib.SIN(close)
+        return pd.Series(res, index=self.df.index, name='SIN')
+
+    def sinh(self) -> pd.Series:
+        """Vector Trigonometric Sinh"""
+        close = self.df['close'].values
+        res = talib.SINH(close)
+        return pd.Series(res, index=self.df.index, name='SINH')
+
+    def sqrt(self) -> pd.Series:
+        """Vector Square Root"""
+        close = self.df['close'].values
+        res = talib.SQRT(close)
+        return pd.Series(res, index=self.df.index, name='SQRT')
+
+    def tan(self) -> pd.Series:
+        """Vector Trigonometric Tan"""
+        close = self.df['close'].values
+        res = talib.TAN(close)
+        return pd.Series(res, index=self.df.index, name='TAN')
+
+    def tanh(self) -> pd.Series:
+        """Vector Trigonometric Tanh"""
+        close = self.df['close'].values
+        res = talib.TANH(close)
+        return pd.Series(res, index=self.df.index, name='TANH')
+
+    # MATH OPERATORS
+
+    def add(self) -> pd.Series:
+        """Vector Arithmetic Add"""
+        high = self.df['high'].values
+        low = self.df['low'].values
+        res = talib.ADD(high, low)
+        return pd.Series(res, index=self.df.index, name='ADD')
+
+    def div(self) -> pd.Series:
+        """Vector Arithmetic Div"""
+        high = self.df['high'].values
+        low = self.df['low'].values
+        res = talib.DIV(high, low)
+        return pd.Series(res, index=self.df.index, name='DIV')
+
+    def max(self, timeperiod=30) -> pd.Series:
+        """Highest value over a specified period"""
+        close = self.df['close'].values
+        res = talib.MAX(close, timeperiod=timeperiod)
+        return pd.Series(res, index=self.df.index, name='MAX')
+
+    def maxindex(self, timeperiod=30) -> pd.Series:
+        """Index of highest value over a specified period"""
+        close = self.df['close'].values
+        res = talib.MAXINDEX(close, timeperiod=timeperiod)
+        return pd.Series(res, index=self.df.index, name='MAXINDEX')
+
+    def min(self, timeperiod=30) -> pd.Series:
+        """Lowest value over a specified period"""
+        close = self.df['close'].values
+        res = talib.MIN(close, timeperiod=timeperiod)
+        return pd.Series(res, index=self.df.index, name='MIN')
+
+    def minindex(self, timeperiod=30) -> pd.Series:
+        """Index of lowest value over a specified period"""
+        close = self.df['close'].values
+        res = talib.MININDEX(close, timeperiod=timeperiod)
+        return pd.Series(res, index=self.df.index, name='MININDEX')
+
+    def minmax(self, timeperiod=30) -> pd.DataFrame:
+        """Lowest and highest values over a specified period"""
+        close = self.df['close'].values
+        min_val, max_val = talib.MINMAX(close, timeperiod=timeperiod)
+        return pd.DataFrame({'min': min_val, 'max': max_val}, index=self.df.index)
+
+    def minmaxindex(self, timeperiod=30) -> pd.DataFrame:
+        """Indexes of lowest and highest values over a specified period"""
+        close = self.df['close'].values
+        minidx, maxidx = talib.MINMAXINDEX(close, timeperiod=timeperiod)
+        return pd.DataFrame({'minidx': minidx, 'maxidx': maxidx}, index=self.df.index)
+
+    def mult(self) -> pd.Series:
+        """Vector Arithmetic Mult"""
+        high = self.df['high'].values
+        low = self.df['low'].values
+        res = talib.MULT(high, low)
+        return pd.Series(res, index=self.df.index, name='MULT')
+
+    def sub(self) -> pd.Series:
+        """Vector Arithmetic Substraction"""
+        high = self.df['high'].values
+        low = self.df['low'].values
+        res = talib.SUB(high, low)
+        return pd.Series(res, index=self.df.index, name='SUB')
+
+    def sum(self, timeperiod=30) -> pd.Series:
+        """Summation"""
+        close = self.df['close'].values
+        res = talib.SUM(close, timeperiod=timeperiod)
+        return pd.Series(res, index=self.df.index, name='SUM')

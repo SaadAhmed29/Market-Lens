@@ -697,3 +697,372 @@ class TalibIndicators:
         close = self.df['close'].values
         res = talib.SUM(close, timeperiod=timeperiod)
         return pd.Series(res, index=self.df.index, name='SUM')
+
+    # PATTERN RECOGNITION
+
+    def cdl2crows(self) -> pd.Series:
+        """Two Crows"""
+        open_, high, low, close = self.df['open'].values, self.df['high'].values, self.df['low'].values, self.df['close'].values
+        res = talib.CDL2CROWS(open_, high, low, close)
+        return pd.Series(res, index=self.df.index, name='CDL2CROWS')
+
+    def cdl3blackcrows(self) -> pd.Series:
+        """Three Black Crows"""
+        open_, high, low, close = self.df['open'].values, self.df['high'].values, self.df['low'].values, self.df['close'].values
+        res = talib.CDL3BLACKCROWS(open_, high, low, close)
+        return pd.Series(res, index=self.df.index, name='CDL3BLACKCROWS')
+
+    def cdl3inside(self) -> pd.Series:
+        """Three Inside Up/Down"""
+        open_, high, low, close = self.df['open'].values, self.df['high'].values, self.df['low'].values, self.df['close'].values
+        res = talib.CDL3INSIDE(open_, high, low, close)
+        return pd.Series(res, index=self.df.index, name='CDL3INSIDE')
+
+    def cdl3linestrike(self) -> pd.Series:
+        """Three-Line Strike"""
+        open_, high, low, close = self.df['open'].values, self.df['high'].values, self.df['low'].values, self.df['close'].values
+        res = talib.CDL3LINESTRIKE(open_, high, low, close)
+        return pd.Series(res, index=self.df.index, name='CDL3LINESTRIKE')
+
+    def cdl3outside(self) -> pd.Series:
+        """Three Outside Up/Down"""
+        open_, high, low, close = self.df['open'].values, self.df['high'].values, self.df['low'].values, self.df['close'].values
+        res = talib.CDL3OUTSIDE(open_, high, low, close)
+        return pd.Series(res, index=self.df.index, name='CDL3OUTSIDE')
+
+    def cdl3starsinsouth(self) -> pd.Series:
+        """Three Stars In The South"""
+        open_, high, low, close = self.df['open'].values, self.df['high'].values, self.df['low'].values, self.df['close'].values
+        res = talib.CDL3STARSINSOUTH(open_, high, low, close)
+        return pd.Series(res, index=self.df.index, name='CDL3STARSINSOUTH')
+
+    def cdl3whitesoldiers(self) -> pd.Series:
+        """Three Advancing White Soldiers"""
+        open_, high, low, close = self.df['open'].values, self.df['high'].values, self.df['low'].values, self.df['close'].values
+        res = talib.CDL3WHITESOLDIERS(open_, high, low, close)
+        return pd.Series(res, index=self.df.index, name='CDL3WHITESOLDIERS')
+
+    def cdlabandonedbaby(self, penetration=0.3) -> pd.Series:
+        """Abandoned Baby"""
+        open_, high, low, close = self.df['open'].values, self.df['high'].values, self.df['low'].values, self.df['close'].values
+        res = talib.CDLABANDONEDBABY(open_, high, low, close, penetration=penetration)
+        return pd.Series(res, index=self.df.index, name='CDLABANDONEDBABY')
+
+    def cdladvanceblock(self) -> pd.Series:
+        """Advance Block"""
+        open_, high, low, close = self.df['open'].values, self.df['high'].values, self.df['low'].values, self.df['close'].values
+        res = talib.CDLADVANCEBLOCK(open_, high, low, close)
+        return pd.Series(res, index=self.df.index, name='CDLADVANCEBLOCK')
+
+    def cdlbelthold(self) -> pd.Series:
+        """Belt-hold"""
+        open_, high, low, close = self.df['open'].values, self.df['high'].values, self.df['low'].values, self.df['close'].values
+        res = talib.CDLBELTHOLD(open_, high, low, close)
+        return pd.Series(res, index=self.df.index, name='CDLBELTHOLD')
+
+    def cdlbreakaway(self) -> pd.Series:
+        """Breakaway"""
+        open_, high, low, close = self.df['open'].values, self.df['high'].values, self.df['low'].values, self.df['close'].values
+        res = talib.CDLBREAKAWAY(open_, high, low, close)
+        return pd.Series(res, index=self.df.index, name='CDLBREAKAWAY')
+
+    def cdlclosingmarubozu(self) -> pd.Series:
+        """Closing Marubozu"""
+        open_, high, low, close = self.df['open'].values, self.df['high'].values, self.df['low'].values, self.df['close'].values
+        res = talib.CDLCLOSINGMARUBOZU(open_, high, low, close)
+        return pd.Series(res, index=self.df.index, name='CDLCLOSINGMARUBOZU')
+
+    def cdlconcealbabyswall(self) -> pd.Series:
+        """Concealing Baby Swallow"""
+        open_, high, low, close = self.df['open'].values, self.df['high'].values, self.df['low'].values, self.df['close'].values
+        res = talib.CDLCONCEALBABYSWALL(open_, high, low, close)
+        return pd.Series(res, index=self.df.index, name='CDLCONCEALBABYSWALL')
+
+    def cdlcounterattack(self) -> pd.Series:
+        """Counterattack"""
+        open_, high, low, close = self.df['open'].values, self.df['high'].values, self.df['low'].values, self.df['close'].values
+        res = talib.CDLCOUNTERATTACK(open_, high, low, close)
+        return pd.Series(res, index=self.df.index, name='CDLCOUNTERATTACK')
+
+    def cdldarkcloudcover(self, penetration=0.5) -> pd.Series:
+        """Dark Cloud Cover"""
+        open_, high, low, close = self.df['open'].values, self.df['high'].values, self.df['low'].values, self.df['close'].values
+        res = talib.CDLDARKCLOUDCOVER(open_, high, low, close, penetration=penetration)
+        return pd.Series(res, index=self.df.index, name='CDLDARKCLOUDCOVER')
+
+    def cdldoji(self) -> pd.Series:
+        """Doji"""
+        open_, high, low, close = self.df['open'].values, self.df['high'].values, self.df['low'].values, self.df['close'].values
+        res = talib.CDLDOJI(open_, high, low, close)
+        return pd.Series(res, index=self.df.index, name='CDLDOJI')
+
+    def cdldojistar(self) -> pd.Series:
+        """Doji Star"""
+        open_, high, low, close = self.df['open'].values, self.df['high'].values, self.df['low'].values, self.df['close'].values
+        res = talib.CDLDOJISTAR(open_, high, low, close)
+        return pd.Series(res, index=self.df.index, name='CDLDOJISTAR')
+
+    def cdldragonflydoji(self) -> pd.Series:
+        """Dragonfly Doji"""
+        open_, high, low, close = self.df['open'].values, self.df['high'].values, self.df['low'].values, self.df['close'].values
+        res = talib.CDLDRAGONFLYDOJI(open_, high, low, close)
+        return pd.Series(res, index=self.df.index, name='CDLDRAGONFLYDOJI')
+
+    def cdlengulfing(self) -> pd.Series:
+        """Engulfing Pattern"""
+        open_, high, low, close = self.df['open'].values, self.df['high'].values, self.df['low'].values, self.df['close'].values
+        res = talib.CDLENGULFING(open_, high, low, close)
+        return pd.Series(res, index=self.df.index, name='CDLENGULFING')
+
+    def cdleveningdojistar(self, penetration=0.3) -> pd.Series:
+        """Evening Doji Star"""
+        open_, high, low, close = self.df['open'].values, self.df['high'].values, self.df['low'].values, self.df['close'].values
+        res = talib.CDLEVENINGDOJISTAR(open_, high, low, close, penetration=penetration)
+        return pd.Series(res, index=self.df.index, name='CDLEVENINGDOJISTAR')
+
+    def cdleveningstar(self, penetration=0.3) -> pd.Series:
+        """Evening Star"""
+        open_, high, low, close = self.df['open'].values, self.df['high'].values, self.df['low'].values, self.df['close'].values
+        res = talib.CDLEVENINGSTAR(open_, high, low, close, penetration=penetration)
+        return pd.Series(res, index=self.df.index, name='CDLEVENINGSTAR')
+
+    def cdlgapsidesidewhite(self) -> pd.Series:
+        """Up/Down-gap side-by-side white lines"""
+        open_, high, low, close = self.df['open'].values, self.df['high'].values, self.df['low'].values, self.df['close'].values
+        res = talib.CDLGAPSIDESIDEWHITE(open_, high, low, close)
+        return pd.Series(res, index=self.df.index, name='CDLGAPSIDESIDEWHITE')
+
+    def cdlgravestonedoji(self) -> pd.Series:
+        """Gravestone Doji"""
+        open_, high, low, close = self.df['open'].values, self.df['high'].values, self.df['low'].values, self.df['close'].values
+        res = talib.CDLGRAVESTONEDOJI(open_, high, low, close)
+        return pd.Series(res, index=self.df.index, name='CDLGRAVESTONEDOJI')
+
+    def cdlhammer(self) -> pd.Series:
+        """Hammer"""
+        open_, high, low, close = self.df['open'].values, self.df['high'].values, self.df['low'].values, self.df['close'].values
+        res = talib.CDLHAMMER(open_, high, low, close)
+        return pd.Series(res, index=self.df.index, name='CDLHAMMER')
+
+    def cdlhangingman(self) -> pd.Series:
+        """Hanging Man"""
+        open_, high, low, close = self.df['open'].values, self.df['high'].values, self.df['low'].values, self.df['close'].values
+        res = talib.CDLHANGINGMAN(open_, high, low, close)
+        return pd.Series(res, index=self.df.index, name='CDLHANGINGMAN')
+
+    def cdlharami(self) -> pd.Series:
+        """Harami Pattern"""
+        open_, high, low, close = self.df['open'].values, self.df['high'].values, self.df['low'].values, self.df['close'].values
+        res = talib.CDLHARAMI(open_, high, low, close)
+        return pd.Series(res, index=self.df.index, name='CDLHARAMI')
+
+    def cdlharamicross(self) -> pd.Series:
+        """Harami Cross Pattern"""
+        open_, high, low, close = self.df['open'].values, self.df['high'].values, self.df['low'].values, self.df['close'].values
+        res = talib.CDLHARAMICROSS(open_, high, low, close)
+        return pd.Series(res, index=self.df.index, name='CDLHARAMICROSS')
+
+    def cdlhighwave(self) -> pd.Series:
+        """High-Wave Candle"""
+        open_, high, low, close = self.df['open'].values, self.df['high'].values, self.df['low'].values, self.df['close'].values
+        res = talib.CDLHIGHWAVE(open_, high, low, close)
+        return pd.Series(res, index=self.df.index, name='CDLHIGHWAVE')
+
+    def cdlhikkake(self) -> pd.Series:
+        """Hikkake Pattern"""
+        open_, high, low, close = self.df['open'].values, self.df['high'].values, self.df['low'].values, self.df['close'].values
+        res = talib.CDLHIKKAKE(open_, high, low, close)
+        return pd.Series(res, index=self.df.index, name='CDLHIKKAKE')
+
+    def cdlhikkakemod(self) -> pd.Series:
+        """Modified Hikkake Pattern"""
+        open_, high, low, close = self.df['open'].values, self.df['high'].values, self.df['low'].values, self.df['close'].values
+        res = talib.CDLHIKKAKEMOD(open_, high, low, close)
+        return pd.Series(res, index=self.df.index, name='CDLHIKKAKEMOD')
+
+    def cdlhomingpigeon(self) -> pd.Series:
+        """Homing Pigeon"""
+        open_, high, low, close = self.df['open'].values, self.df['high'].values, self.df['low'].values, self.df['close'].values
+        res = talib.CDLHOMINGPIGEON(open_, high, low, close)
+        return pd.Series(res, index=self.df.index, name='CDLHOMINGPIGEON')
+
+    def cdlidentical3crows(self) -> pd.Series:
+        """Identical Three Crows"""
+        open_, high, low, close = self.df['open'].values, self.df['high'].values, self.df['low'].values, self.df['close'].values
+        res = talib.CDLIDENTICAL3CROWS(open_, high, low, close)
+        return pd.Series(res, index=self.df.index, name='CDLIDENTICAL3CROWS')
+
+    def cdlinneck(self) -> pd.Series:
+        """In-Neck Pattern"""
+        open_, high, low, close = self.df['open'].values, self.df['high'].values, self.df['low'].values, self.df['close'].values
+        res = talib.CDLINNECK(open_, high, low, close)
+        return pd.Series(res, index=self.df.index, name='CDLINNECK')
+
+    def cdlinvertedhammer(self) -> pd.Series:
+        """Inverted Hammer"""
+        open_, high, low, close = self.df['open'].values, self.df['high'].values, self.df['low'].values, self.df['close'].values
+        res = talib.CDLINVERTEDHAMMER(open_, high, low, close)
+        return pd.Series(res, index=self.df.index, name='CDLINVERTEDHAMMER')
+
+    def cdlkicking(self) -> pd.Series:
+        """Kicking"""
+        open_, high, low, close = self.df['open'].values, self.df['high'].values, self.df['low'].values, self.df['close'].values
+        res = talib.CDLKICKING(open_, high, low, close)
+        return pd.Series(res, index=self.df.index, name='CDLKICKING')
+
+    def cdlkickingbylength(self) -> pd.Series:
+        """Kicking - bull/bear determined by the longer marubozu"""
+        open_, high, low, close = self.df['open'].values, self.df['high'].values, self.df['low'].values, self.df['close'].values
+        res = talib.CDLKICKINGBYLENGTH(open_, high, low, close)
+        return pd.Series(res, index=self.df.index, name='CDLKICKINGBYLENGTH')
+
+    def cdlladderbottom(self) -> pd.Series:
+        """Ladder Bottom"""
+        open_, high, low, close = self.df['open'].values, self.df['high'].values, self.df['low'].values, self.df['close'].values
+        res = talib.CDLLADDERBOTTOM(open_, high, low, close)
+        return pd.Series(res, index=self.df.index, name='CDLLADDERBOTTOM')
+
+    def cdllongleggeddoji(self) -> pd.Series:
+        """Long Legged Doji"""
+        open_, high, low, close = self.df['open'].values, self.df['high'].values, self.df['low'].values, self.df['close'].values
+        res = talib.CDLLONGLEGGEDDOJI(open_, high, low, close)
+        return pd.Series(res, index=self.df.index, name='CDLLONGLEGGEDDOJI')
+
+    def cdllongline(self) -> pd.Series:
+        """Long Line Candle"""
+        open_, high, low, close = self.df['open'].values, self.df['high'].values, self.df['low'].values, self.df['close'].values
+        res = talib.CDLLONGLINE(open_, high, low, close)
+        return pd.Series(res, index=self.df.index, name='CDLLONGLINE')
+
+    def cdlmarubozu(self) -> pd.Series:
+        """Marubozu"""
+        open_, high, low, close = self.df['open'].values, self.df['high'].values, self.df['low'].values, self.df['close'].values
+        res = talib.CDLMARUBOZU(open_, high, low, close)
+        return pd.Series(res, index=self.df.index, name='CDLMARUBOZU')
+
+    def cdlmatchinglow(self) -> pd.Series:
+        """Matching Low"""
+        open_, high, low, close = self.df['open'].values, self.df['high'].values, self.df['low'].values, self.df['close'].values
+        res = talib.CDLMATCHINGLOW(open_, high, low, close)
+        return pd.Series(res, index=self.df.index, name='CDLMATCHINGLOW')
+
+    def cdlmathold(self, penetration=0.5) -> pd.Series:
+        """Mat Hold"""
+        open_, high, low, close = self.df['open'].values, self.df['high'].values, self.df['low'].values, self.df['close'].values
+        res = talib.CDLMATHOLD(open_, high, low, close, penetration=penetration)
+        return pd.Series(res, index=self.df.index, name='CDLMATHOLD')
+
+    def cdlmorningdojistar(self, penetration=0.3) -> pd.Series:
+        """Morning Doji Star"""
+        open_, high, low, close = self.df['open'].values, self.df['high'].values, self.df['low'].values, self.df['close'].values
+        res = talib.CDLMORNINGDOJISTAR(open_, high, low, close, penetration=penetration)
+        return pd.Series(res, index=self.df.index, name='CDLMORNINGDOJISTAR')
+
+    def cdlmorningstar(self, penetration=0.3) -> pd.Series:
+        """Morning Star"""
+        open_, high, low, close = self.df['open'].values, self.df['high'].values, self.df['low'].values, self.df['close'].values
+        res = talib.CDLMORNINGSTAR(open_, high, low, close, penetration=penetration)
+        return pd.Series(res, index=self.df.index, name='CDLMORNINGSTAR')
+
+    def cdlonneck(self) -> pd.Series:
+        """On-Neck Pattern"""
+        open_, high, low, close = self.df['open'].values, self.df['high'].values, self.df['low'].values, self.df['close'].values
+        res = talib.CDLONNECK(open_, high, low, close)
+        return pd.Series(res, index=self.df.index, name='CDLONNECK')
+
+    def cdlpiercing(self) -> pd.Series:
+        """Piercing Pattern"""
+        open_, high, low, close = self.df['open'].values, self.df['high'].values, self.df['low'].values, self.df['close'].values
+        res = talib.CDLPIERCING(open_, high, low, close)
+        return pd.Series(res, index=self.df.index, name='CDLPIERCING')
+
+    def cdlrickshawman(self) -> pd.Series:
+        """Rickshaw Man"""
+        open_, high, low, close = self.df['open'].values, self.df['high'].values, self.df['low'].values, self.df['close'].values
+        res = talib.CDLRICKSHAWMAN(open_, high, low, close)
+        return pd.Series(res, index=self.df.index, name='CDLRICKSHAWMAN')
+
+    def cdlrisefall3methods(self) -> pd.Series:
+        """Rising/Falling Three Methods"""
+        open_, high, low, close = self.df['open'].values, self.df['high'].values, self.df['low'].values, self.df['close'].values
+        res = talib.CDLRISEFALL3METHODS(open_, high, low, close)
+        return pd.Series(res, index=self.df.index, name='CDLRISEFALL3METHODS')
+
+    def cdlseparatinglines(self) -> pd.Series:
+        """Separating Lines"""
+        open_, high, low, close = self.df['open'].values, self.df['high'].values, self.df['low'].values, self.df['close'].values
+        res = talib.CDLSEPARATINGLINES(open_, high, low, close)
+        return pd.Series(res, index=self.df.index, name='CDLSEPARATINGLINES')
+
+    def cdlshootingstar(self) -> pd.Series:
+        """Shooting Star"""
+        open_, high, low, close = self.df['open'].values, self.df['high'].values, self.df['low'].values, self.df['close'].values
+        res = talib.CDLSHOOTINGSTAR(open_, high, low, close)
+        return pd.Series(res, index=self.df.index, name='CDLSHOOTINGSTAR')
+
+    def cdlshortline(self) -> pd.Series:
+        """Short Line Candle"""
+        open_, high, low, close = self.df['open'].values, self.df['high'].values, self.df['low'].values, self.df['close'].values
+        res = talib.CDLSHORTLINE(open_, high, low, close)
+        return pd.Series(res, index=self.df.index, name='CDLSHORTLINE')
+
+    def cdlspinningtop(self) -> pd.Series:
+        """Spinning Top"""
+        open_, high, low, close = self.df['open'].values, self.df['high'].values, self.df['low'].values, self.df['close'].values
+        res = talib.CDLSPINNINGTOP(open_, high, low, close)
+        return pd.Series(res, index=self.df.index, name='CDLSPINNINGTOP')
+
+    def cdlstalledpattern(self) -> pd.Series:
+        """Stalled Pattern"""
+        open_, high, low, close = self.df['open'].values, self.df['high'].values, self.df['low'].values, self.df['close'].values
+        res = talib.CDLSTALLEDPATTERN(open_, high, low, close)
+        return pd.Series(res, index=self.df.index, name='CDLSTALLEDPATTERN')
+
+    def cdlsticksandwich(self) -> pd.Series:
+        """Stick Sandwich"""
+        open_, high, low, close = self.df['open'].values, self.df['high'].values, self.df['low'].values, self.df['close'].values
+        res = talib.CDLSTICKSANDWICH(open_, high, low, close)
+        return pd.Series(res, index=self.df.index, name='CDLSTICKSANDWICH')
+
+    def cdltakuri(self) -> pd.Series:
+        """Takuri (Dragonfly Doji with very long lower shadow)"""
+        open_, high, low, close = self.df['open'].values, self.df['high'].values, self.df['low'].values, self.df['close'].values
+        res = talib.CDLTAKURI(open_, high, low, close)
+        return pd.Series(res, index=self.df.index, name='CDLTAKURI')
+
+    def cdltasukigap(self) -> pd.Series:
+        """Tasuki Gap"""
+        open_, high, low, close = self.df['open'].values, self.df['high'].values, self.df['low'].values, self.df['close'].values
+        res = talib.CDLTASUKIGAP(open_, high, low, close)
+        return pd.Series(res, index=self.df.index, name='CDLTASUKIGAP')
+
+    def cdlthrusting(self) -> pd.Series:
+        """Thrusting Pattern"""
+        open_, high, low, close = self.df['open'].values, self.df['high'].values, self.df['low'].values, self.df['close'].values
+        res = talib.CDLTHRUSTING(open_, high, low, close)
+        return pd.Series(res, index=self.df.index, name='CDLTHRUSTING')
+
+    def cdltristar(self) -> pd.Series:
+        """Tristar Pattern"""
+        open_, high, low, close = self.df['open'].values, self.df['high'].values, self.df['low'].values, self.df['close'].values
+        res = talib.CDLTRISTAR(open_, high, low, close)
+        return pd.Series(res, index=self.df.index, name='CDLTRISTAR')
+
+    def cdlunique3river(self) -> pd.Series:
+        """Unique 3 River"""
+        open_, high, low, close = self.df['open'].values, self.df['high'].values, self.df['low'].values, self.df['close'].values
+        res = talib.CDLUNIQUE3RIVER(open_, high, low, close)
+        return pd.Series(res, index=self.df.index, name='CDLUNIQUE3RIVER')
+
+    def cdlupsidegap2crows(self) -> pd.Series:
+        """Upside Gap Two Crows"""
+        open_, high, low, close = self.df['open'].values, self.df['high'].values, self.df['low'].values, self.df['close'].values
+        res = talib.CDLUPSIDEGAP2CROWS(open_, high, low, close)
+        return pd.Series(res, index=self.df.index, name='CDLUPSIDEGAP2CROWS')
+
+    def cdlxsidegap3methods(self) -> pd.Series:
+        """Upside/Downside Gap Three Methods"""
+        open_, high, low, close = self.df['open'].values, self.df['high'].values, self.df['low'].values, self.df['close'].values
+        res = talib.CDLXSIDEGAP3METHODS(open_, high, low, close)
+        return pd.Series(res, index=self.df.index, name='CDLXSIDEGAP3METHODS')
+

@@ -356,3 +356,122 @@ class TalibIndicators:
         close = self.df['close'].values
         res = talib.WILLR(high, low, close, timeperiod=timeperiod)
         return pd.Series(res, index=self.df.index, name='WILLR')
+
+    # VOLUME INDICATORS
+
+    def ad(self) -> pd.Series:
+        """Chaikin A/D Line"""
+        high = self.df['high'].values
+        low = self.df['low'].values
+        close = self.df['close'].values
+        volume = self.df['volume'].values
+        res = talib.AD(high, low, close, volume)
+        return pd.Series(res, index=self.df.index, name='AD')
+
+    def adosc(self, fastperiod=3, slowperiod=10) -> pd.Series:
+        """Chaikin A/D Oscillator"""
+        high = self.df['high'].values
+        low = self.df['low'].values
+        close = self.df['close'].values
+        volume = self.df['volume'].values
+        res = talib.ADOSC(high, low, close, volume, fastperiod=fastperiod, slowperiod=slowperiod)
+        return pd.Series(res, index=self.df.index, name='ADOSC')
+
+    def obv(self) -> pd.Series:
+        """On Balance Volume"""
+        close = self.df['close'].values
+        volume = self.df['volume'].values
+        res = talib.OBV(close, volume)
+        return pd.Series(res, index=self.df.index, name='OBV')
+
+    # CYCLE INDICATORS
+
+    def ht_dcperiod(self) -> pd.Series:
+        """Hilbert Transform - Dominant Cycle Period"""
+        close = self.df['close'].values
+        res = talib.HT_DCPERIOD(close)
+        return pd.Series(res, index=self.df.index, name='HT_DCPERIOD')
+
+    def ht_dcphase(self) -> pd.Series:
+        """Hilbert Transform - Dominant Cycle Phase"""
+        close = self.df['close'].values
+        res = talib.HT_DCPHASE(close)
+        return pd.Series(res, index=self.df.index, name='HT_DCPHASE')
+
+    def ht_phasor(self) -> pd.DataFrame:
+        """Hilbert Transform - Phasor Components"""
+        close = self.df['close'].values
+        inphase, quadrature = talib.HT_PHASOR(close)
+        return pd.DataFrame({'inphase': inphase, 'quadrature': quadrature}, index=self.df.index)
+
+    def ht_sine(self) -> pd.DataFrame:
+        """Hilbert Transform - SineWave"""
+        close = self.df['close'].values
+        sine, leadsine = talib.HT_SINE(close)
+        return pd.DataFrame({'sine': sine, 'leadsine': leadsine}, index=self.df.index)
+
+    def ht_trendmode(self) -> pd.Series:
+        """Hilbert Transform - Trend vs Cycle Mode"""
+        close = self.df['close'].values
+        res = talib.HT_TRENDMODE(close)
+        return pd.Series(res, index=self.df.index, name='HT_TRENDMODE')
+
+    # PRICE TRANSFORM
+
+    def avgprice(self) -> pd.Series:
+        """Average Price"""
+        open_ = self.df['open'].values
+        high = self.df['high'].values
+        low = self.df['low'].values
+        close = self.df['close'].values
+        res = talib.AVGPRICE(open_, high, low, close)
+        return pd.Series(res, index=self.df.index, name='AVGPRICE')
+
+    def medprice(self) -> pd.Series:
+        """Median Price"""
+        high = self.df['high'].values
+        low = self.df['low'].values
+        res = talib.MEDPRICE(high, low)
+        return pd.Series(res, index=self.df.index, name='MEDPRICE')
+
+    def typprice(self) -> pd.Series:
+        """Typical Price"""
+        high = self.df['high'].values
+        low = self.df['low'].values
+        close = self.df['close'].values
+        res = talib.TYPPRICE(high, low, close)
+        return pd.Series(res, index=self.df.index, name='TYPPRICE')
+
+    def wclprice(self) -> pd.Series:
+        """Weighted Close Price"""
+        high = self.df['high'].values
+        low = self.df['low'].values
+        close = self.df['close'].values
+        res = talib.WCLPRICE(high, low, close)
+        return pd.Series(res, index=self.df.index, name='WCLPRICE')
+
+    # VOLATILITY INDICATORS
+
+    def atr(self, timeperiod=14) -> pd.Series:
+        """Average True Range"""
+        high = self.df['high'].values
+        low = self.df['low'].values
+        close = self.df['close'].values
+        res = talib.ATR(high, low, close, timeperiod=timeperiod)
+        return pd.Series(res, index=self.df.index, name='ATR')
+
+    def natr(self, timeperiod=14) -> pd.Series:
+        """Normalized Average True Range"""
+        high = self.df['high'].values
+        low = self.df['low'].values
+        close = self.df['close'].values
+        res = talib.NATR(high, low, close, timeperiod=timeperiod)
+        return pd.Series(res, index=self.df.index, name='NATR')
+
+    def trange(self) -> pd.Series:
+        """True Range"""
+        high = self.df['high'].values
+        low = self.df['low'].values
+        close = self.df['close'].values
+        res = talib.TRANGE(high, low, close)
+        return pd.Series(res, index=self.df.index, name='TRANGE')

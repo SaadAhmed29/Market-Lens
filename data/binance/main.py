@@ -4,20 +4,20 @@ Loads the Binance config and orchestrates the exchange planner.
 """
 
 import logging
-import os
 from pathlib import Path
 
 from data.data_downloader import DataFetcher
 from utils.config import load_exchange_config
 
 # Configure logging for the application
-os.makedirs("logs", exist_ok=True)
+log_dir = Path(__file__).resolve().parents[2] / "logs"
+log_dir.mkdir(exist_ok=True)
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
     datefmt="%Y-%m-%d %H:%M:%S",
     handlers=[
-        logging.FileHandler("logs/binance.log"),
+        logging.FileHandler(log_dir / "binance.log", encoding="utf-8"),
         logging.StreamHandler()
     ]
 )

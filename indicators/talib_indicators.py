@@ -1,10 +1,11 @@
 import numpy as np
 import pandas as pd
 import talib
+import yaml
 from data.data_downloader import DataFetcher
 
 class TalibIndicators:
-    def __init__(self, exchange: str, symbol: str, start, end, time_frame: str):
+    def __init__(self, exchange: str, symbol: str, start, end, time_frame: str, config_path: str):
         """
         Initializes the TalibIndicators class by fetching OHLCV data.
         """
@@ -16,10 +17,12 @@ class TalibIndicators:
             time_frame=time_frame,
             resample_1m=False
         )
+        with open(config_path, "r") as f:
+            self.config = yaml.safe_load(f)
 
     # OVERLAP STUDIES INDICATORS
 
-    def bbands(self, timeperiod=5, nbdevup=2, nbdevdn=2, matype=0) -> tuple[pd.Series, pd.Series, pd.Series]:
+    def bbands(self, inputs, **kwargs) -> tuple[pd.Series, pd.Series, pd.Series]:
         """
         Bollinger Bands
         
@@ -32,15 +35,13 @@ class TalibIndicators:
         Returns:
             tuple[pd.Series, pd.Series, pd.Series]: The calculated indicator(s).
         """
-        close = self.df['close'].values
-        upperband, middleband, lowerband = talib.BBANDS(
-            close, timeperiod=timeperiod, nbdevup=nbdevup, nbdevdn=nbdevdn, matype=matype
-        )
+        close = self.df[inputs[0]].values
+        upperband, middleband, lowerband = talib.BBANDS(close, **kwargs)
         return (pd.Series(upperband, index=self.df.index, name='bb_upperband'), 
                 pd.Series(middleband, index=self.df.index, name='bb_middleband'), 
                 pd.Series(lowerband, index=self.df.index, name='bb_lowerband'))
 
-    def dema(self, timeperiod=30) -> pd.Series:
+    def dema(self, inputs, **kwargs) -> pd.Series:
         """
         Double Exponential Moving Average
         
@@ -50,11 +51,11 @@ class TalibIndicators:
         Returns:
             pd.Series: The calculated indicator(s).
         """
-        close = self.df['close'].values
-        res = talib.DEMA(close, timeperiod=timeperiod)
+        close = self.df[inputs[0]].values
+        res = talib.DEMA(close, **kwargs)
         return pd.Series(res, index=self.df.index, name='DEMA')
 
-    def ema(self, timeperiod=30) -> pd.Series:
+    def ema(self, inputs, **kwargs) -> pd.Series:
         """
         Exponential Moving Average
         
@@ -64,22 +65,22 @@ class TalibIndicators:
         Returns:
             pd.Series: The calculated indicator(s).
         """
-        close = self.df['close'].values
-        res = talib.EMA(close, timeperiod=timeperiod)
+        close = self.df[inputs[0]].values
+        res = talib.EMA(close, **kwargs)
         return pd.Series(res, index=self.df.index, name='EMA')
 
-    def ht_trendline(self) -> pd.Series:
+    def ht_trendline(self, inputs, **kwargs) -> pd.Series:
         """
         Hilbert Transform - Instantaneous Trendline
         
         Returns:
             pd.Series: The calculated indicator(s).
         """
-        close = self.df['close'].values
-        res = talib.HT_TRENDLINE(close)
+        close = self.df[inputs[0]].values
+        res = talib.HT_TRENDLINE(close, **kwargs)
         return pd.Series(res, index=self.df.index, name='HT_TRENDLINE')
 
-    def kama(self, timeperiod=30) -> pd.Series:
+    def kama(self, inputs, **kwargs) -> pd.Series:
         """
         Kaufman Adaptive Moving Average
         
@@ -89,11 +90,11 @@ class TalibIndicators:
         Returns:
             pd.Series: The calculated indicator(s).
         """
-        close = self.df['close'].values
-        res = talib.KAMA(close, timeperiod=timeperiod)
+        close = self.df[inputs[0]].values
+        res = talib.KAMA(close, **kwargs)
         return pd.Series(res, index=self.df.index, name='KAMA')
 
-    def ma(self, timeperiod=30, matype=0) -> pd.Series:
+    def ma(self, inputs, **kwargs) -> pd.Series:
         """
         Moving average
         
@@ -104,11 +105,11 @@ class TalibIndicators:
         Returns:
             pd.Series: The calculated indicator(s).
         """
-        close = self.df['close'].values
-        res = talib.MA(close, timeperiod=timeperiod, matype=matype)
+        close = self.df[inputs[0]].values
+        res = talib.MA(close, **kwargs)
         return pd.Series(res, index=self.df.index, name='MA')
 
-    def mama(self, fastlimit=0.5, slowlimit=0.05) -> tuple[pd.Series, pd.Series]:
+    def mama(self, inputs, **kwargs) -> tuple[pd.Series, pd.Series]:
         """
         MESA Adaptive Moving Average
         
@@ -119,11 +120,11 @@ class TalibIndicators:
         Returns:
             tuple[pd.Series, pd.Series]: The calculated indicator(s).
         """
-        close = self.df['close'].values
-        mama, fama = talib.MAMA(close, fastlimit=fastlimit, slowlimit=slowlimit)
+        close = self.df[inputs[0]].values
+        mama, fama = talib.MAMA(close, **kwargs)
         return (pd.Series(mama, index=self.df.index, name='mama'), pd.Series(fama, index=self.df.index, name='fama'))
 
-    def mavp(self, periods, minperiod=2, maxperiod=30, matype=0) -> pd.Series:
+    def mavp(self, inputs, **kwargs) -> pd.Series:
         """
         Moving average with variable period
         
@@ -136,18 +137,18 @@ class TalibIndicators:
         Returns:
             pd.Series: The calculated indicator(s).
         """
-        close = self.df['close'].values
-        
-        # Ensure periods is a numpy array of floats
+        close = self.df[inputs[0]].values
+
+        periods = kwargs.pop('periods')  # extract from kwargs before passing remainder
         if isinstance(periods, (pd.Series, pd.DataFrame)):
-            periods_array = periods.values
+            periods_array = periods.values.astype(float)
         else:
             periods_array = np.asarray(periods, dtype=float)
             
-        res = talib.MAVP(close, periods=periods_array, minperiod=minperiod, maxperiod=maxperiod, matype=matype)
+        res = talib.MAVP(close, periods_array, **kwargs)
         return pd.Series(res, index=self.df.index, name='MAVP')
 
-    def midpoint(self, timeperiod=14) -> pd.Series:
+    def midpoint(self, inputs, **kwargs) -> pd.Series:
         """
         MidPoint over period
         
@@ -157,11 +158,11 @@ class TalibIndicators:
         Returns:
             pd.Series: The calculated indicator(s).
         """
-        close = self.df['close'].values
-        res = talib.MIDPOINT(close, timeperiod=timeperiod)
+        close = self.df[inputs[0]].values
+        res = talib.MIDPOINT(close, **kwargs)
         return pd.Series(res, index=self.df.index, name='MIDPOINT')
 
-    def midprice(self, timeperiod=14) -> pd.Series:
+    def midprice(self, inputs, **kwargs) -> pd.Series:
         """
         MidPrice over period
         
@@ -171,12 +172,12 @@ class TalibIndicators:
         Returns:
             pd.Series: The calculated indicator(s).
         """
-        high = self.df['high'].values
-        low = self.df['low'].values
-        res = talib.MIDPRICE(high, low, timeperiod=timeperiod)
+        high = self.df[inputs[0]].values
+        low = self.df[inputs[1]].values
+        res = talib.MIDPRICE(high, low, **kwargs)
         return pd.Series(res, index=self.df.index, name='MIDPRICE')
 
-    def sar(self, acceleration=0.02, maximum=0.2) -> pd.Series:
+    def sar(self, inputs, **kwargs) -> pd.Series:
         """
         Parabolic SAR
         
@@ -187,14 +188,12 @@ class TalibIndicators:
         Returns:
             pd.Series: The calculated indicator(s).
         """
-        high = self.df['high'].values
-        low = self.df['low'].values
-        res = talib.SAR(high, low, acceleration=acceleration, maximum=maximum)
+        high = self.df[inputs[0]].values
+        low = self.df[inputs[1]].values
+        res = talib.SAR(high, low, **kwargs)
         return pd.Series(res, index=self.df.index, name='SAR')
 
-    def sarext(self, startvalue=0, offsetonreverse=0, accelerationinitlong=0.02, 
-               accelerationlong=0.02, accelerationmaxlong=0.2, accelerationinitshort=0.02, 
-               accelerationshort=0.02, accelerationmaxshort=0.2) -> pd.Series:
+    def sarext(self, inputs, **kwargs) -> pd.Series:
         """
         Parabolic SAR - Extended
         
@@ -211,17 +210,12 @@ class TalibIndicators:
         Returns:
             pd.Series: The calculated indicator(s).
         """
-        high = self.df['high'].values
-        low = self.df['low'].values
-        res = talib.SAREXT(
-            high, low, startvalue=startvalue, offsetonreverse=offsetonreverse, 
-            accelerationinitlong=accelerationinitlong, accelerationlong=accelerationlong, 
-            accelerationmaxlong=accelerationmaxlong, accelerationinitshort=accelerationinitshort, 
-            accelerationshort=accelerationshort, accelerationmaxshort=accelerationmaxshort
-        )
+        high = self.df[inputs[0]].values
+        low = self.df[inputs[1]].values
+        res = talib.SAREXT(high, low, **kwargs)
         return pd.Series(res, index=self.df.index, name='SAREXT')
 
-    def sma(self, timeperiod=30) -> pd.Series:
+    def sma(self, inputs, **kwargs) -> pd.Series:
         """
         Simple Moving Average
         
@@ -231,11 +225,11 @@ class TalibIndicators:
         Returns:
             pd.Series: The calculated indicator(s).
         """
-        close = self.df['close'].values
-        res = talib.SMA(close, timeperiod=timeperiod)
+        close = self.df[inputs[0]].values
+        res = talib.SMA(close, **kwargs)
         return pd.Series(res, index=self.df.index, name='SMA')
 
-    def t3(self, timeperiod=5, vfactor=0.7) -> pd.Series:
+    def t3(self, inputs, **kwargs) -> pd.Series:
         """
         Triple Exponential Moving Average (T3)
         
@@ -246,11 +240,11 @@ class TalibIndicators:
         Returns:
             pd.Series: The calculated indicator(s).
         """
-        close = self.df['close'].values
-        res = talib.T3(close, timeperiod=timeperiod, vfactor=vfactor)
+        close = self.df[inputs[0]].values
+        res = talib.T3(close, **kwargs)
         return pd.Series(res, index=self.df.index, name='T3')
 
-    def tema(self, timeperiod=30) -> pd.Series:
+    def tema(self, inputs, **kwargs) -> pd.Series:
         """
         Triple Exponential Moving Average
         
@@ -260,11 +254,11 @@ class TalibIndicators:
         Returns:
             pd.Series: The calculated indicator(s).
         """
-        close = self.df['close'].values
-        res = talib.TEMA(close, timeperiod=timeperiod)
+        close = self.df[inputs[0]].values
+        res = talib.TEMA(close, **kwargs)
         return pd.Series(res, index=self.df.index, name='TEMA')
 
-    def trima(self, timeperiod=30) -> pd.Series:
+    def trima(self, inputs, **kwargs) -> pd.Series:
         """
         Triangular Moving Average
         
@@ -274,11 +268,11 @@ class TalibIndicators:
         Returns:
             pd.Series: The calculated indicator(s).
         """
-        close = self.df['close'].values
-        res = talib.TRIMA(close, timeperiod=timeperiod)
+        close = self.df[inputs[0]].values
+        res = talib.TRIMA(close, **kwargs)
         return pd.Series(res, index=self.df.index, name='TRIMA')
 
-    def wma(self, timeperiod=30) -> pd.Series:
+    def wma(self, inputs, **kwargs) -> pd.Series:
         """
         Weighted Moving Average
         
@@ -288,14 +282,14 @@ class TalibIndicators:
         Returns:
             pd.Series: The calculated indicator(s).
         """
-        close = self.df['close'].values
-        res = talib.WMA(close, timeperiod=timeperiod)
+        close = self.df[inputs[0]].values
+        res = talib.WMA(close, **kwargs)
         return pd.Series(res, index=self.df.index, name='WMA')
 
 
     # MOMENTUM INDICATORS
 
-    def adx(self, timeperiod=14) -> pd.Series:
+    def adx(self, inputs, **kwargs) -> pd.Series:
         """
         Average Directional Movement Index
         
@@ -305,13 +299,13 @@ class TalibIndicators:
         Returns:
             pd.Series: The calculated indicator(s).
         """
-        high = self.df['high'].values
-        low = self.df['low'].values
-        close = self.df['close'].values
-        res = talib.ADX(high, low, close, timeperiod=timeperiod)
+        high = self.df[inputs[0]].values
+        low = self.df[inputs[1]].values
+        close = self.df[inputs[2]].values
+        res = talib.ADX(high, low, close, **kwargs)
         return pd.Series(res, index=self.df.index, name='ADX')
 
-    def adxr(self, timeperiod=14) -> pd.Series:
+    def adxr(self, inputs, **kwargs) -> pd.Series:
         """
         Average Directional Movement Index Rating
         
@@ -321,13 +315,13 @@ class TalibIndicators:
         Returns:
             pd.Series: The calculated indicator(s).
         """
-        high = self.df['high'].values
-        low = self.df['low'].values
-        close = self.df['close'].values
-        res = talib.ADXR(high, low, close, timeperiod=timeperiod)
+        high = self.df[inputs[0]].values
+        low = self.df[inputs[1]].values
+        close = self.df[inputs[2]].values
+        res = talib.ADXR(high, low, close, **kwargs)
         return pd.Series(res, index=self.df.index, name='ADXR')
 
-    def apo(self, fastperiod=12, slowperiod=26, matype=0) -> pd.Series:
+    def apo(self, inputs, **kwargs) -> pd.Series:
         """
         Absolute Price Oscillator
         
@@ -339,11 +333,11 @@ class TalibIndicators:
         Returns:
             pd.Series: The calculated indicator(s).
         """
-        close = self.df['close'].values
-        res = talib.APO(close, fastperiod=fastperiod, slowperiod=slowperiod, matype=matype)
+        close = self.df[inputs[0]].values
+        res = talib.APO(close, **kwargs)
         return pd.Series(res, index=self.df.index, name='APO')
 
-    def aroon(self, timeperiod=14) -> tuple[pd.Series, pd.Series]:
+    def aroon(self, inputs, **kwargs) -> tuple[pd.Series, pd.Series]:
         """
         Aroon
         
@@ -353,12 +347,12 @@ class TalibIndicators:
         Returns:
             tuple[pd.Series, pd.Series]: The calculated indicator(s).
         """
-        high = self.df['high'].values
-        low = self.df['low'].values
-        aroondown, aroonup = talib.AROON(high, low, timeperiod=timeperiod)
+        high = self.df[inputs[0]].values
+        low = self.df[inputs[1]].values
+        aroondown, aroonup = talib.AROON(high, low, **kwargs)
         return (pd.Series(aroondown, index=self.df.index, name='aroondown'), pd.Series(aroonup, index=self.df.index, name='aroonup'))
 
-    def aroonosc(self, timeperiod=14) -> pd.Series:
+    def aroonosc(self, inputs, **kwargs) -> pd.Series:
         """
         Aroon Oscillator
         
@@ -368,26 +362,26 @@ class TalibIndicators:
         Returns:
             pd.Series: The calculated indicator(s).
         """
-        high = self.df['high'].values
-        low = self.df['low'].values
-        res = talib.AROONOSC(high, low, timeperiod=timeperiod)
+        high = self.df[inputs[0]].values
+        low = self.df[inputs[1]].values
+        res = talib.AROONOSC(high, low, **kwargs)
         return pd.Series(res, index=self.df.index, name='AROONOSC')
 
-    def bop(self) -> pd.Series:
+    def bop(self, inputs, **kwargs) -> pd.Series:
         """
         Balance Of Power
         
         Returns:
             pd.Series: The calculated indicator(s).
         """
-        open_ = self.df['open'].values
-        high = self.df['high'].values
-        low = self.df['low'].values
-        close = self.df['close'].values
-        res = talib.BOP(open_, high, low, close)
+        open_ = self.df[inputs[0]].values
+        high = self.df[inputs[1]].values
+        low = self.df[inputs[2]].values
+        close = self.df[inputs[3]].values
+        res = talib.BOP(open_, high, low, close, **kwargs)
         return pd.Series(res, index=self.df.index, name='BOP')
 
-    def cci(self, timeperiod=14) -> pd.Series:
+    def cci(self, inputs, **kwargs) -> pd.Series:
         """
         Commodity Channel Index
         
@@ -397,13 +391,13 @@ class TalibIndicators:
         Returns:
             pd.Series: The calculated indicator(s).
         """
-        high = self.df['high'].values
-        low = self.df['low'].values
-        close = self.df['close'].values
-        res = talib.CCI(high, low, close, timeperiod=timeperiod)
+        high = self.df[inputs[0]].values
+        low = self.df[inputs[1]].values
+        close = self.df[inputs[2]].values
+        res = talib.CCI(high, low, close, **kwargs)
         return pd.Series(res, index=self.df.index, name='CCI')
 
-    def cmo(self, timeperiod=14) -> pd.Series:
+    def cmo(self, inputs, **kwargs) -> pd.Series:
         """
         Chande Momentum Oscillator
         
@@ -413,11 +407,11 @@ class TalibIndicators:
         Returns:
             pd.Series: The calculated indicator(s).
         """
-        close = self.df['close'].values
-        res = talib.CMO(close, timeperiod=timeperiod)
+        close = self.df[inputs[0]].values
+        res = talib.CMO(close, **kwargs)
         return pd.Series(res, index=self.df.index, name='CMO')
 
-    def dx(self, timeperiod=14) -> pd.Series:
+    def dx(self, inputs, **kwargs) -> pd.Series:
         """
         Directional Movement Index
         
@@ -427,13 +421,13 @@ class TalibIndicators:
         Returns:
             pd.Series: The calculated indicator(s).
         """
-        high = self.df['high'].values
-        low = self.df['low'].values
-        close = self.df['close'].values
-        res = talib.DX(high, low, close, timeperiod=timeperiod)
+        high = self.df[inputs[0]].values
+        low = self.df[inputs[1]].values
+        close = self.df[inputs[2]].values
+        res = talib.DX(high, low, close, **kwargs)
         return pd.Series(res, index=self.df.index, name='dx')
 
-    def macd(self, fastperiod=12, slowperiod=26, signalperiod=9) -> tuple[pd.Series, pd.Series, pd.Series]:
+    def macd(self, inputs, **kwargs) -> tuple[pd.Series, pd.Series, pd.Series]:
         """
         Moving Average Convergence/Divergence
         
@@ -445,11 +439,11 @@ class TalibIndicators:
         Returns:
             tuple[pd.Series, pd.Series, pd.Series]: The calculated indicator(s).
         """
-        close = self.df['close'].values
-        macd, macdsignal, macdhist = talib.MACD(close, fastperiod=fastperiod, slowperiod=slowperiod, signalperiod=signalperiod)
+        close = self.df[inputs[0]].values
+        macd, macdsignal, macdhist = talib.MACD(close, **kwargs)
         return (pd.Series(macd, index=self.df.index, name='macd'), pd.Series(macdsignal, index=self.df.index, name='macd_signal'), pd.Series(macdhist, index=self.df.index, name='macd_hist'))
 
-    def macdext(self, fastperiod=12, fastmatype=0, slowperiod=26, slowmatype=0, signalperiod=9, signalmatype=0) -> tuple[pd.Series, pd.Series, pd.Series]:
+    def macdext(self, inputs, **kwargs) -> tuple[pd.Series, pd.Series, pd.Series]:
         """
         MACD with controllable MA type
         
@@ -464,11 +458,11 @@ class TalibIndicators:
         Returns:
             tuple[pd.Series, pd.Series, pd.Series]: The calculated indicator(s).
         """
-        close = self.df['close'].values
-        macd, macdsignal, macdhist = talib.MACDEXT(close, fastperiod=fastperiod, fastmatype=fastmatype, slowperiod=slowperiod, slowmatype=slowmatype, signalperiod=signalperiod, signalmatype=signalmatype)
+        close = self.df[inputs[0]].values
+        macd, macdsignal, macdhist = talib.MACDEXT(close, **kwargs)
         return (pd.Series(macd, index=self.df.index, name='macdext_macd'), pd.Series(macdsignal, index=self.df.index, name='macdext_signal'), pd.Series(macdhist, index=self.df.index, name='macdext_hist'))
 
-    def macdfix(self, signalperiod=9) -> tuple[pd.Series, pd.Series, pd.Series]:
+    def macdfix(self, inputs, **kwargs) -> tuple[pd.Series, pd.Series, pd.Series]:
         """
         Moving Average Convergence/Divergence Fix 12/26
         
@@ -478,11 +472,11 @@ class TalibIndicators:
         Returns:
             tuple[pd.Series, pd.Series, pd.Series]: The calculated indicator(s).
         """
-        close = self.df['close'].values
-        macd, macdsignal, macdhist = talib.MACDFIX(close, signalperiod=signalperiod)
+        close = self.df[inputs[0]].values
+        macd, macdsignal, macdhist = talib.MACDFIX(close, **kwargs)
         return (pd.Series(macd, index=self.df.index, name='macdfix_macd'), pd.Series(macdsignal, index=self.df.index, name='macdfix_signal'), pd.Series(macdhist, index=self.df.index, name='macdfix_hist'))
 
-    def mfi(self, timeperiod=14) -> pd.Series:
+    def mfi(self, inputs, **kwargs) -> pd.Series:
         """
         Money Flow Index
         
@@ -492,14 +486,14 @@ class TalibIndicators:
         Returns:
             pd.Series: The calculated indicator(s).
         """
-        high = self.df['high'].values
-        low = self.df['low'].values
-        close = self.df['close'].values
-        volume = self.df['volume'].values
-        res = talib.MFI(high, low, close, volume, timeperiod=timeperiod)
+        high = self.df[inputs[0]].values
+        low = self.df[inputs[1]].values
+        close = self.df[inputs[2]].values
+        volume = self.df[inputs[3]].values
+        res = talib.MFI(high, low, close, volume, **kwargs)
         return pd.Series(res, index=self.df.index, name='MFI')
 
-    def minus_di(self, timeperiod=14) -> pd.Series:
+    def minus_di(self, inputs, **kwargs) -> pd.Series:
         """
         Minus Directional Indicator
         
@@ -509,13 +503,13 @@ class TalibIndicators:
         Returns:
             pd.Series: The calculated indicator(s).
         """
-        high = self.df['high'].values
-        low = self.df['low'].values
-        close = self.df['close'].values
-        res = talib.MINUS_DI(high, low, close, timeperiod=timeperiod)
+        high = self.df[inputs[0]].values
+        low = self.df[inputs[1]].values
+        close = self.df[inputs[2]].values
+        res = talib.MINUS_DI(high, low, close, **kwargs)
         return pd.Series(res, index=self.df.index, name='MINUS_DI')
 
-    def minus_dm(self, timeperiod=14) -> pd.Series:
+    def minus_dm(self, inputs, **kwargs) -> pd.Series:
         """
         Minus Directional Movement
         
@@ -525,12 +519,12 @@ class TalibIndicators:
         Returns:
             pd.Series: The calculated indicator(s).
         """
-        high = self.df['high'].values
-        low = self.df['low'].values
-        res = talib.MINUS_DM(high, low, timeperiod=timeperiod)
+        high = self.df[inputs[0]].values
+        low = self.df[inputs[1]].values
+        res = talib.MINUS_DM(high, low, **kwargs)
         return pd.Series(res, index=self.df.index, name='MINUS_DM')
 
-    def mom(self, timeperiod=10) -> pd.Series:
+    def mom(self, inputs, **kwargs) -> pd.Series:
         """
         Momentum
         
@@ -540,11 +534,11 @@ class TalibIndicators:
         Returns:
             pd.Series: The calculated indicator(s).
         """
-        close = self.df['close'].values
-        res = talib.MOM(close, timeperiod=timeperiod)
+        close = self.df[inputs[0]].values
+        res = talib.MOM(close, **kwargs)
         return pd.Series(res, index=self.df.index, name='MOM')
 
-    def plus_di(self, timeperiod=14) -> pd.Series:
+    def plus_di(self, inputs, **kwargs) -> pd.Series:
         """
         Plus Directional Indicator
         
@@ -554,13 +548,13 @@ class TalibIndicators:
         Returns:
             pd.Series: The calculated indicator(s).
         """
-        high = self.df['high'].values
-        low = self.df['low'].values
-        close = self.df['close'].values
-        res = talib.PLUS_DI(high, low, close, timeperiod=timeperiod)
+        high = self.df[inputs[0]].values
+        low = self.df[inputs[1]].values
+        close = self.df[inputs[2]].values
+        res = talib.PLUS_DI(high, low, close, **kwargs)
         return pd.Series(res, index=self.df.index, name='PLUS_DI')
 
-    def plus_dm(self, timeperiod=14) -> pd.Series:
+    def plus_dm(self, inputs, **kwargs) -> pd.Series:
         """
         Plus Directional Movement
         
@@ -570,12 +564,12 @@ class TalibIndicators:
         Returns:
             pd.Series: The calculated indicator(s).
         """
-        high = self.df['high'].values
-        low = self.df['low'].values
-        res = talib.PLUS_DM(high, low, timeperiod=timeperiod)
+        high = self.df[inputs[0]].values
+        low = self.df[inputs[1]].values
+        res = talib.PLUS_DM(high, low, **kwargs)
         return pd.Series(res, index=self.df.index, name='PLUS_DM')
 
-    def ppo(self, fastperiod=12, slowperiod=26, matype=0) -> pd.Series:
+    def ppo(self, inputs, **kwargs) -> pd.Series:
         """
         Percentage Price Oscillator
         
@@ -587,11 +581,11 @@ class TalibIndicators:
         Returns:
             pd.Series: The calculated indicator(s).
         """
-        close = self.df['close'].values
-        res = talib.PPO(close, fastperiod=fastperiod, slowperiod=slowperiod, matype=matype)
+        close = self.df[inputs[0]].values
+        res = talib.PPO(close, **kwargs)
         return pd.Series(res, index=self.df.index, name='PPO')
 
-    def roc(self, timeperiod=10) -> pd.Series:
+    def roc(self, inputs, **kwargs) -> pd.Series:
         """
         Rate of change : ((price/prevPrice)-1)*100
         
@@ -601,11 +595,11 @@ class TalibIndicators:
         Returns:
             pd.Series: The calculated indicator(s).
         """
-        close = self.df['close'].values
-        res = talib.ROC(close, timeperiod=timeperiod)
+        close = self.df[inputs[0]].values
+        res = talib.ROC(close, **kwargs)
         return pd.Series(res, index=self.df.index, name='ROC')
 
-    def rocp(self, timeperiod=10) -> pd.Series:
+    def rocp(self, inputs, **kwargs) -> pd.Series:
         """
         Rate of change Percentage: (price-prevPrice)/prevPrice
         
@@ -615,11 +609,11 @@ class TalibIndicators:
         Returns:
             pd.Series: The calculated indicator(s).
         """
-        close = self.df['close'].values
-        res = talib.ROCP(close, timeperiod=timeperiod)
+        close = self.df[inputs[0]].values
+        res = talib.ROCP(close, **kwargs)
         return pd.Series(res, index=self.df.index, name='ROCP')
 
-    def rocr(self, timeperiod=10) -> pd.Series:
+    def rocr(self, inputs, **kwargs) -> pd.Series:
         """
         Rate of change ratio: (price/prevPrice)
         
@@ -629,11 +623,11 @@ class TalibIndicators:
         Returns:
             pd.Series: The calculated indicator(s).
         """
-        close = self.df['close'].values
-        res = talib.ROCR(close, timeperiod=timeperiod)
+        close = self.df[inputs[0]].values
+        res = talib.ROCR(close, **kwargs)
         return pd.Series(res, index=self.df.index, name='ROCR')
 
-    def rocr100(self, timeperiod=10) -> pd.Series:
+    def rocr100(self, inputs, **kwargs) -> pd.Series:
         """
         Rate of change ratio 100 scale: (price/prevPrice)*100
         
@@ -643,11 +637,11 @@ class TalibIndicators:
         Returns:
             pd.Series: The calculated indicator(s).
         """
-        close = self.df['close'].values
-        res = talib.ROCR100(close, timeperiod=timeperiod)
+        close = self.df[inputs[0]].values
+        res = talib.ROCR100(close, **kwargs)
         return pd.Series(res, index=self.df.index, name='ROCR100')
 
-    def rsi(self, timeperiod=14) -> pd.Series:
+    def rsi(self, inputs, **kwargs) -> pd.Series:
         """
         Relative Strength Index
         
@@ -657,11 +651,11 @@ class TalibIndicators:
         Returns:
             pd.Series: The calculated indicator(s).
         """
-        close = self.df['close'].values
-        res = talib.RSI(close, timeperiod=timeperiod)
+        close = self.df[inputs[0]].values
+        res = talib.RSI(close, **kwargs)
         return pd.Series(res, index=self.df.index, name='RSI')
 
-    def stoch(self, fastk_period=5, slowk_period=3, slowk_matype=0, slowd_period=3, slowd_matype=0) -> tuple[pd.Series, pd.Series]:
+    def stoch(self, inputs, **kwargs) -> tuple[pd.Series, pd.Series]:
         """
         Stochastic
         
@@ -675,13 +669,13 @@ class TalibIndicators:
         Returns:
             tuple[pd.Series, pd.Series]: The calculated indicator(s).
         """
-        high = self.df['high'].values
-        low = self.df['low'].values
-        close = self.df['close'].values
-        slowk, slowd = talib.STOCH(high, low, close, fastk_period=fastk_period, slowk_period=slowk_period, slowk_matype=slowk_matype, slowd_period=slowd_period, slowd_matype=slowd_matype)
+        high = self.df[inputs[0]].values
+        low = self.df[inputs[1]].values
+        close = self.df[inputs[2]].values
+        slowk, slowd = talib.STOCH(high, low, close, **kwargs)
         return (pd.Series(slowk, index=self.df.index, name='stoch_slowk'), pd.Series(slowd, index=self.df.index, name='stoch_slowd'))
 
-    def stochf(self, fastk_period=5, fastd_period=3, fastd_matype=0) -> tuple[pd.Series, pd.Series]:
+    def stochf(self, inputs, **kwargs) -> tuple[pd.Series, pd.Series]:
         """
         Stochastic Fast
         
@@ -693,13 +687,13 @@ class TalibIndicators:
         Returns:
             tuple[pd.Series, pd.Series]: The calculated indicator(s).
         """
-        high = self.df['high'].values
-        low = self.df['low'].values
-        close = self.df['close'].values
-        fastk, fastd = talib.STOCHF(high, low, close, fastk_period=fastk_period, fastd_period=fastd_period, fastd_matype=fastd_matype)
+        high = self.df[inputs[0]].values
+        low = self.df[inputs[1]].values
+        close = self.df[inputs[2]].values
+        fastk, fastd = talib.STOCHF(high, low, close, **kwargs)
         return (pd.Series(fastk, index=self.df.index, name='stochf_fastk'), pd.Series(fastd, index=self.df.index, name='stochf_fastd'))
 
-    def stochrsi(self, timeperiod=14, fastk_period=5, fastd_period=3, fastd_matype=0) -> tuple[pd.Series, pd.Series]:
+    def stochrsi(self, inputs, **kwargs) -> tuple[pd.Series, pd.Series]:
         """
         Stochastic Relative Strength Index
         
@@ -712,11 +706,11 @@ class TalibIndicators:
         Returns:
             tuple[pd.Series, pd.Series]: The calculated indicator(s).
         """
-        close = self.df['close'].values
-        fastk, fastd = talib.STOCHRSI(close, timeperiod=timeperiod, fastk_period=fastk_period, fastd_period=fastd_period, fastd_matype=fastd_matype)
+        close = self.df[inputs[0]].values
+        fastk, fastd = talib.STOCHRSI(close, **kwargs)
         return (pd.Series(fastk, index=self.df.index, name='stochrsi_fastk'), pd.Series(fastd, index=self.df.index, name='stochrsi_fastd'))
 
-    def trix(self, timeperiod=30) -> pd.Series:
+    def trix(self, inputs, **kwargs) -> pd.Series:
         """
         1-day Rate-Of-Change (ROC) of a Triple Smooth EMA
         
@@ -726,11 +720,11 @@ class TalibIndicators:
         Returns:
             pd.Series: The calculated indicator(s).
         """
-        close = self.df['close'].values
-        res = talib.TRIX(close, timeperiod=timeperiod)
+        close = self.df[inputs[0]].values
+        res = talib.TRIX(close, **kwargs)
         return pd.Series(res, index=self.df.index, name='TRIX')
 
-    def ultosc(self, timeperiod1=7, timeperiod2=14, timeperiod3=28) -> pd.Series:
+    def ultosc(self, inputs, **kwargs) -> pd.Series:
         """
         Ultimate Oscillator
         
@@ -742,13 +736,13 @@ class TalibIndicators:
         Returns:
             pd.Series: The calculated indicator(s).
         """
-        high = self.df['high'].values
-        low = self.df['low'].values
-        close = self.df['close'].values
-        res = talib.ULTOSC(high, low, close, timeperiod1=timeperiod1, timeperiod2=timeperiod2, timeperiod3=timeperiod3)
+        high = self.df[inputs[0]].values
+        low = self.df[inputs[1]].values
+        close = self.df[inputs[2]].values
+        res = talib.ULTOSC(high, low, close, **kwargs)
         return pd.Series(res, index=self.df.index, name='ULTOSC')
 
-    def willr(self, timeperiod=14) -> pd.Series:
+    def willr(self, inputs, **kwargs) -> pd.Series:
         """
         Williams' %R
         
@@ -758,29 +752,29 @@ class TalibIndicators:
         Returns:
             pd.Series: The calculated indicator(s).
         """
-        high = self.df['high'].values
-        low = self.df['low'].values
-        close = self.df['close'].values
-        res = talib.WILLR(high, low, close, timeperiod=timeperiod)
+        high = self.df[inputs[0]].values
+        low = self.df[inputs[1]].values
+        close = self.df[inputs[2]].values
+        res = talib.WILLR(high, low, close, **kwargs)
         return pd.Series(res, index=self.df.index, name='WILLR')
 
     # VOLUME INDICATORS
 
-    def ad(self) -> pd.Series:
+    def ad(self, inputs, **kwargs) -> pd.Series:
         """
         Chaikin A/D Line
 
         Returns:
             pd.Series: The calculated indicator(s).
         """
-        high = self.df['high'].values
-        low = self.df['low'].values
-        close = self.df['close'].values
-        volume = self.df['volume'].values
-        res = talib.AD(high, low, close, volume)
+        high = self.df[inputs[0]].values
+        low = self.df[inputs[1]].values
+        close = self.df[inputs[2]].values
+        volume = self.df[inputs[3]].values
+        res = talib.AD(high, low, close, volume, **kwargs)
         return pd.Series(res, index=self.df.index, name='AD')
 
-    def adosc(self, fastperiod=3, slowperiod=10) -> pd.Series:
+    def adosc(self, inputs, **kwargs) -> pd.Series:
         """
         Chaikin A/D Oscillator
 
@@ -791,139 +785,139 @@ class TalibIndicators:
         Returns:
             pd.Series: The calculated indicator(s).
         """
-        high = self.df['high'].values
-        low = self.df['low'].values
-        close = self.df['close'].values
-        volume = self.df['volume'].values
-        res = talib.ADOSC(high, low, close, volume, fastperiod=fastperiod, slowperiod=slowperiod)
+        high = self.df[inputs[0]].values
+        low = self.df[inputs[1]].values
+        close = self.df[inputs[2]].values
+        volume = self.df[inputs[3]].values
+        res = talib.ADOSC(high, low, close, volume, **kwargs)
         return pd.Series(res, index=self.df.index, name='ADOSC')
 
-    def obv(self) -> pd.Series:
+    def obv(self, inputs, **kwargs) -> pd.Series:
         """
         On Balance Volume
 
         Returns:
             pd.Series: The calculated indicator(s).
         """
-        close = self.df['close'].values
-        volume = self.df['volume'].values
-        res = talib.OBV(close, volume)
+        close = self.df[inputs[0]].values
+        volume = self.df[inputs[1]].values
+        res = talib.OBV(close, volume, **kwargs)
         return pd.Series(res, index=self.df.index, name='OBV')
 
     # CYCLE INDICATORS
 
-    def ht_dcperiod(self) -> pd.Series:
+    def ht_dcperiod(self, inputs, **kwargs) -> pd.Series:
         """
         Hilbert Transform - Dominant Cycle Period
 
         Returns:
             pd.Series: The calculated indicator(s).
         """
-        close = self.df['close'].values
-        res = talib.HT_DCPERIOD(close)
+        close = self.df[inputs[0]].values
+        res = talib.HT_DCPERIOD(close, **kwargs)
         return pd.Series(res, index=self.df.index, name='HT_DCPERIOD')
 
-    def ht_dcphase(self) -> pd.Series:
+    def ht_dcphase(self, inputs, **kwargs) -> pd.Series:
         """
         Hilbert Transform - Dominant Cycle Phase
 
         Returns:
             pd.Series: The calculated indicator(s).
         """
-        close = self.df['close'].values
-        res = talib.HT_DCPHASE(close)
+        close = self.df[inputs[0]].values
+        res = talib.HT_DCPHASE(close, **kwargs)
         return pd.Series(res, index=self.df.index, name='HT_DCPHASE')
 
-    def ht_phasor(self) -> tuple[pd.Series, pd.Series]:
+    def ht_phasor(self, inputs, **kwargs) -> tuple[pd.Series, pd.Series]:
         """
         Hilbert Transform - Phasor Components
 
         Returns:
             tuple[pd.Series, pd.Series]: The calculated indicator(s).
         """
-        close = self.df['close'].values
-        inphase, quadrature = talib.HT_PHASOR(close)
+        close = self.df[inputs[0]].values
+        inphase, quadrature = talib.HT_PHASOR(close, **kwargs)
         return (pd.Series(inphase, index=self.df.index, name='inphase'), pd.Series(quadrature, index=self.df.index, name='quadrature'))
 
-    def ht_sine(self) -> tuple[pd.Series, pd.Series]:
+    def ht_sine(self, inputs, **kwargs) -> tuple[pd.Series, pd.Series]:
         """
         Hilbert Transform - SineWave
 
         Returns:
             tuple[pd.Series, pd.Series]: The calculated indicator(s).
         """
-        close = self.df['close'].values
-        sine, leadsine = talib.HT_SINE(close)
+        close = self.df[inputs[0]].values
+        sine, leadsine = talib.HT_SINE(close, **kwargs)
         return (pd.Series(sine, index=self.df.index, name='sine'), pd.Series(leadsine, index=self.df.index, name='leadsine'))
 
-    def ht_trendmode(self) -> pd.Series:
+    def ht_trendmode(self, inputs, **kwargs) -> pd.Series:
         """
         Hilbert Transform - Trend vs Cycle Mode
 
         Returns:
             pd.Series: The calculated indicator(s).
         """
-        close = self.df['close'].values
-        res = talib.HT_TRENDMODE(close)
+        close = self.df[inputs[0]].values
+        res = talib.HT_TRENDMODE(close, **kwargs)
         return pd.Series(res, index=self.df.index, name='HT_TRENDMODE')
 
     # PRICE TRANSFORM
 
-    def avgprice(self) -> pd.Series:
+    def avgprice(self, inputs, **kwargs) -> pd.Series:
         """
         Average Price
 
         Returns:
             pd.Series: The calculated indicator(s).
         """
-        open_ = self.df['open'].values
-        high = self.df['high'].values
-        low = self.df['low'].values
-        close = self.df['close'].values
-        res = talib.AVGPRICE(open_, high, low, close)
+        open_ = self.df[inputs[0]].values
+        high = self.df[inputs[1]].values
+        low = self.df[inputs[2]].values
+        close = self.df[inputs[3]].values
+        res = talib.AVGPRICE(open_, high, low, close, **kwargs)
         return pd.Series(res, index=self.df.index, name='AVGPRICE')
 
-    def medprice(self) -> pd.Series:
+    def medprice(self, inputs, **kwargs) -> pd.Series:
         """
         Median Price
 
         Returns:
             pd.Series: The calculated indicator(s).
         """
-        high = self.df['high'].values
-        low = self.df['low'].values
-        res = talib.MEDPRICE(high, low)
+        high = self.df[inputs[0]].values
+        low = self.df[inputs[1]].values
+        res = talib.MEDPRICE(high, low, **kwargs)
         return pd.Series(res, index=self.df.index, name='MEDPRICE')
 
-    def typprice(self) -> pd.Series:
+    def typprice(self, inputs, **kwargs) -> pd.Series:
         """
         Typical Price
 
         Returns:
             pd.Series: The calculated indicator(s).
         """
-        high = self.df['high'].values
-        low = self.df['low'].values
-        close = self.df['close'].values
-        res = talib.TYPPRICE(high, low, close)
+        high = self.df[inputs[0]].values
+        low = self.df[inputs[1]].values
+        close = self.df[inputs[2]].values
+        res = talib.TYPPRICE(high, low, close, **kwargs)
         return pd.Series(res, index=self.df.index, name='TYPPRICE')
 
-    def wclprice(self) -> pd.Series:
+    def wclprice(self, inputs, **kwargs) -> pd.Series:
         """
         Weighted Close Price
 
         Returns:
             pd.Series: The calculated indicator(s).
         """
-        high = self.df['high'].values
-        low = self.df['low'].values
-        close = self.df['close'].values
-        res = talib.WCLPRICE(high, low, close)
+        high = self.df[inputs[0]].values
+        low = self.df[inputs[1]].values
+        close = self.df[inputs[2]].values
+        res = talib.WCLPRICE(high, low, close, **kwargs)
         return pd.Series(res, index=self.df.index, name='WCLPRICE')
 
     # VOLATILITY INDICATORS
 
-    def atr(self, timeperiod=14) -> pd.Series:
+    def atr(self, inputs, **kwargs) -> pd.Series:
         """
         Average True Range
 
@@ -933,13 +927,13 @@ class TalibIndicators:
         Returns:
             pd.Series: The calculated indicator(s).
         """
-        high = self.df['high'].values
-        low = self.df['low'].values
-        close = self.df['close'].values
-        res = talib.ATR(high, low, close, timeperiod=timeperiod)
+        high = self.df[inputs[0]].values
+        low = self.df[inputs[1]].values
+        close = self.df[inputs[2]].values
+        res = talib.ATR(high, low, close, **kwargs)
         return pd.Series(res, index=self.df.index, name='ATR')
 
-    def natr(self, timeperiod=14) -> pd.Series:
+    def natr(self, inputs, **kwargs) -> pd.Series:
         """
         Normalized Average True Range
 
@@ -949,28 +943,28 @@ class TalibIndicators:
         Returns:
             pd.Series: The calculated indicator(s).
         """
-        high = self.df['high'].values
-        low = self.df['low'].values
-        close = self.df['close'].values
-        res = talib.NATR(high, low, close, timeperiod=timeperiod)
+        high = self.df[inputs[0]].values
+        low = self.df[inputs[1]].values
+        close = self.df[inputs[2]].values
+        res = talib.NATR(high, low, close, **kwargs)
         return pd.Series(res, index=self.df.index, name='NATR')
 
-    def trange(self) -> pd.Series:
+    def trange(self, inputs, **kwargs) -> pd.Series:
         """
         True Range
 
         Returns:
             pd.Series: The calculated indicator(s).
         """
-        high = self.df['high'].values
-        low = self.df['low'].values
-        close = self.df['close'].values
-        res = talib.TRANGE(high, low, close)
+        high = self.df[inputs[0]].values
+        low = self.df[inputs[1]].values
+        close = self.df[inputs[2]].values
+        res = talib.TRANGE(high, low, close, **kwargs)
         return pd.Series(res, index=self.df.index, name='TRANGE')
 
     # STATISTIC FUNCTIONS
 
-    def beta(self, timeperiod=5) -> pd.Series:
+    def beta(self, inputs, **kwargs) -> pd.Series:
         """
         Beta
 
@@ -980,12 +974,12 @@ class TalibIndicators:
         Returns:
             pd.Series: The calculated indicator(s).
         """
-        high = self.df['high'].values
-        low = self.df['low'].values
-        res = talib.BETA(high, low, timeperiod=timeperiod)
+        high = self.df[inputs[0]].values
+        low = self.df[inputs[1]].values
+        res = talib.BETA(high, low, **kwargs)
         return pd.Series(res, index=self.df.index, name='BETA')
 
-    def correl(self, timeperiod=30) -> pd.Series:
+    def correl(self, inputs, **kwargs) -> pd.Series:
         """
         Pearson's Correlation Coefficient (r)
 
@@ -995,12 +989,12 @@ class TalibIndicators:
         Returns:
             pd.Series: The calculated indicator(s).
         """
-        high = self.df['high'].values
-        low = self.df['low'].values
-        res = talib.CORREL(high, low, timeperiod=timeperiod)
+        high = self.df[inputs[0]].values
+        low = self.df[inputs[1]].values
+        res = talib.CORREL(high, low, **kwargs)
         return pd.Series(res, index=self.df.index, name='CORREL')
 
-    def linearreg(self, timeperiod=14) -> pd.Series:
+    def linearreg(self, inputs, **kwargs) -> pd.Series:
         """
         Linear Regression
 
@@ -1010,11 +1004,11 @@ class TalibIndicators:
         Returns:
             pd.Series: The calculated indicator(s).
         """
-        close = self.df['close'].values
-        res = talib.LINEARREG(close, timeperiod=timeperiod)
+        close = self.df[inputs[0]].values
+        res = talib.LINEARREG(close, **kwargs)
         return pd.Series(res, index=self.df.index, name='LINEARREG')
 
-    def linearreg_angle(self, timeperiod=14) -> pd.Series:
+    def linearreg_angle(self, inputs, **kwargs) -> pd.Series:
         """
         Linear Regression Angle
 
@@ -1024,11 +1018,11 @@ class TalibIndicators:
         Returns:
             pd.Series: The calculated indicator(s).
         """
-        close = self.df['close'].values
-        res = talib.LINEARREG_ANGLE(close, timeperiod=timeperiod)
+        close = self.df[inputs[0]].values
+        res = talib.LINEARREG_ANGLE(close, **kwargs)
         return pd.Series(res, index=self.df.index, name='LINEARREG_ANGLE')
 
-    def linearreg_intercept(self, timeperiod=14) -> pd.Series:
+    def linearreg_intercept(self, inputs, **kwargs) -> pd.Series:
         """
         Linear Regression Intercept
 
@@ -1038,11 +1032,11 @@ class TalibIndicators:
         Returns:
             pd.Series: The calculated indicator(s).
         """
-        close = self.df['close'].values
-        res = talib.LINEARREG_INTERCEPT(close, timeperiod=timeperiod)
+        close = self.df[inputs[0]].values
+        res = talib.LINEARREG_INTERCEPT(close, **kwargs)
         return pd.Series(res, index=self.df.index, name='LINEARREG_INTERCEPT')
 
-    def linearreg_slope(self, timeperiod=14) -> pd.Series:
+    def linearreg_slope(self, inputs, **kwargs) -> pd.Series:
         """
         Linear Regression Slope
 
@@ -1052,11 +1046,11 @@ class TalibIndicators:
         Returns:
             pd.Series: The calculated indicator(s).
         """
-        close = self.df['close'].values
-        res = talib.LINEARREG_SLOPE(close, timeperiod=timeperiod)
+        close = self.df[inputs[0]].values
+        res = talib.LINEARREG_SLOPE(close, **kwargs)
         return pd.Series(res, index=self.df.index, name='LINEARREG_SLOPE')
 
-    def stddev(self, timeperiod=5, nbdev=1) -> pd.Series:
+    def stddev(self, inputs, **kwargs) -> pd.Series:
         """
         Standard Deviation
 
@@ -1067,11 +1061,11 @@ class TalibIndicators:
         Returns:
             pd.Series: The calculated indicator(s).
         """
-        close = self.df['close'].values
-        res = talib.STDDEV(close, timeperiod=timeperiod, nbdev=nbdev)
+        close = self.df[inputs[0]].values
+        res = talib.STDDEV(close, **kwargs)
         return pd.Series(res, index=self.df.index, name='STDDEV')
 
-    def tsf(self, timeperiod=14) -> pd.Series:
+    def tsf(self, inputs, **kwargs) -> pd.Series:
         """
         Time Series Forecast
 
@@ -1081,11 +1075,11 @@ class TalibIndicators:
         Returns:
             pd.Series: The calculated indicator(s).
         """
-        close = self.df['close'].values
-        res = talib.TSF(close, timeperiod=timeperiod)
+        close = self.df[inputs[0]].values
+        res = talib.TSF(close, **kwargs)
         return pd.Series(res, index=self.df.index, name='TSF')
 
-    def var(self, timeperiod=5, nbdev=1) -> pd.Series:
+    def var(self, inputs, **kwargs) -> pd.Series:
         """
         Variance
 
@@ -1096,204 +1090,204 @@ class TalibIndicators:
         Returns:
             pd.Series: The calculated indicator(s).
         """
-        close = self.df['close'].values
-        res = talib.VAR(close, timeperiod=timeperiod, nbdev=nbdev)
+        close = self.df[inputs[0]].values
+        res = talib.VAR(close, **kwargs)
         return pd.Series(res, index=self.df.index, name='VAR')
 
     # MATH TRANSFORM
 
-    def acos(self) -> pd.Series:
+    def acos(self, inputs, **kwargs) -> pd.Series:
         """
         Vector Trigonometric ACos
 
         Returns:
             pd.Series: The calculated indicator(s).
         """
-        close = self.df['close'].values
-        res = talib.ACOS(close)
+        close = self.df[inputs[0]].values
+        res = talib.ACOS(close, **kwargs)
         return pd.Series(res, index=self.df.index, name='ACOS')
 
-    def asin(self) -> pd.Series:
+    def asin(self, inputs, **kwargs) -> pd.Series:
         """
         Vector Trigonometric ASin
 
         Returns:
             pd.Series: The calculated indicator(s).
         """
-        close = self.df['close'].values
-        res = talib.ASIN(close)
+        close = self.df[inputs[0]].values
+        res = talib.ASIN(close, **kwargs)
         return pd.Series(res, index=self.df.index, name='ASIN')
 
-    def atan(self) -> pd.Series:
+    def atan(self, inputs, **kwargs) -> pd.Series:
         """
         Vector Trigonometric ATan
 
         Returns:
             pd.Series: The calculated indicator(s).
         """
-        close = self.df['close'].values
-        res = talib.ATAN(close)
+        close = self.df[inputs[0]].values
+        res = talib.ATAN(close, **kwargs)
         return pd.Series(res, index=self.df.index, name='ATAN')
 
-    def ceil(self) -> pd.Series:
+    def ceil(self, inputs, **kwargs) -> pd.Series:
         """
         Vector Ceil
 
         Returns:
             pd.Series: The calculated indicator(s).
         """
-        close = self.df['close'].values
-        res = talib.CEIL(close)
+        close = self.df[inputs[0]].values
+        res = talib.CEIL(close, **kwargs)
         return pd.Series(res, index=self.df.index, name='CEIL')
 
-    def cos(self) -> pd.Series:
+    def cos(self, inputs, **kwargs) -> pd.Series:
         """
         Vector Trigonometric Cos
 
         Returns:
             pd.Series: The calculated indicator(s).
         """
-        close = self.df['close'].values
-        res = talib.COS(close)
+        close = self.df[inputs[0]].values
+        res = talib.COS(close, **kwargs)
         return pd.Series(res, index=self.df.index, name='COS')
 
-    def cosh(self) -> pd.Series:
+    def cosh(self, inputs, **kwargs) -> pd.Series:
         """
         Vector Trigonometric Cosh
 
         Returns:
             pd.Series: The calculated indicator(s).
         """
-        close = self.df['close'].values
-        res = talib.COSH(close)
+        close = self.df[inputs[0]].values
+        res = talib.COSH(close, **kwargs)
         return pd.Series(res, index=self.df.index, name='COSH')
 
-    def exp(self) -> pd.Series:
+    def exp(self, inputs, **kwargs) -> pd.Series:
         """
         Vector Arithmetic Exp
 
         Returns:
             pd.Series: The calculated indicator(s).
         """
-        close = self.df['close'].values
-        res = talib.EXP(close)
+        close = self.df[inputs[0]].values
+        res = talib.EXP(close, **kwargs)
         return pd.Series(res, index=self.df.index, name='EXP')
 
-    def floor(self) -> pd.Series:
+    def floor(self, inputs, **kwargs) -> pd.Series:
         """
         Vector Floor
 
         Returns:
             pd.Series: The calculated indicator(s).
         """
-        close = self.df['close'].values
-        res = talib.FLOOR(close)
+        close = self.df[inputs[0]].values
+        res = talib.FLOOR(close, **kwargs)
         return pd.Series(res, index=self.df.index, name='FLOOR')
 
-    def ln(self) -> pd.Series:
+    def ln(self, inputs, **kwargs) -> pd.Series:
         """
         Vector Log Natural
 
         Returns:
             pd.Series: The calculated indicator(s).
         """
-        close = self.df['close'].values
-        res = talib.LN(close)
+        close = self.df[inputs[0]].values
+        res = talib.LN(close, **kwargs)
         return pd.Series(res, index=self.df.index, name='LN')
 
-    def log10(self) -> pd.Series:
+    def log10(self, inputs, **kwargs) -> pd.Series:
         """
         Vector Log10
 
         Returns:
             pd.Series: The calculated indicator(s).
         """
-        close = self.df['close'].values
-        res = talib.LOG10(close)
+        close = self.df[inputs[0]].values
+        res = talib.LOG10(close, **kwargs)
         return pd.Series(res, index=self.df.index, name='LOG10')
 
-    def sin(self) -> pd.Series:
+    def sin(self, inputs, **kwargs) -> pd.Series:
         """
         Vector Trigonometric Sin
 
         Returns:
             pd.Series: The calculated indicator(s).
         """
-        close = self.df['close'].values
-        res = talib.SIN(close)
+        close = self.df[inputs[0]].values
+        res = talib.SIN(close, **kwargs)
         return pd.Series(res, index=self.df.index, name='SIN')
 
-    def sinh(self) -> pd.Series:
+    def sinh(self, inputs, **kwargs) -> pd.Series:
         """
         Vector Trigonometric Sinh
 
         Returns:
             pd.Series: The calculated indicator(s).
         """
-        close = self.df['close'].values
-        res = talib.SINH(close)
+        close = self.df[inputs[0]].values
+        res = talib.SINH(close, **kwargs)
         return pd.Series(res, index=self.df.index, name='SINH')
 
-    def sqrt(self) -> pd.Series:
+    def sqrt(self, inputs, **kwargs) -> pd.Series:
         """
         Vector Square Root
 
         Returns:
             pd.Series: The calculated indicator(s).
         """
-        close = self.df['close'].values
-        res = talib.SQRT(close)
+        close = self.df[inputs[0]].values
+        res = talib.SQRT(close, **kwargs)
         return pd.Series(res, index=self.df.index, name='SQRT')
 
-    def tan(self) -> pd.Series:
+    def tan(self, inputs, **kwargs) -> pd.Series:
         """
         Vector Trigonometric Tan
 
         Returns:
             pd.Series: The calculated indicator(s).
         """
-        close = self.df['close'].values
-        res = talib.TAN(close)
+        close = self.df[inputs[0]].values
+        res = talib.TAN(close, **kwargs)
         return pd.Series(res, index=self.df.index, name='TAN')
 
-    def tanh(self) -> pd.Series:
+    def tanh(self, inputs, **kwargs) -> pd.Series:
         """
         Vector Trigonometric Tanh
 
         Returns:
             pd.Series: The calculated indicator(s).
         """
-        close = self.df['close'].values
-        res = talib.TANH(close)
+        close = self.df[inputs[0]].values
+        res = talib.TANH(close, **kwargs)
         return pd.Series(res, index=self.df.index, name='TANH')
 
     # MATH OPERATORS
 
-    def add(self) -> pd.Series:
+    def add(self, inputs, **kwargs) -> pd.Series:
         """
         Vector Arithmetic Add
 
         Returns:
             pd.Series: The calculated indicator(s).
         """
-        high = self.df['high'].values
-        low = self.df['low'].values
-        res = talib.ADD(high, low)
+        high = self.df[inputs[0]].values
+        low = self.df[inputs[1]].values
+        res = talib.ADD(high, low, **kwargs)
         return pd.Series(res, index=self.df.index, name='ADD')
 
-    def div(self) -> pd.Series:
+    def div(self, inputs, **kwargs) -> pd.Series:
         """
         Vector Arithmetic Div
 
         Returns:
             pd.Series: The calculated indicator(s).
         """
-        high = self.df['high'].values
-        low = self.df['low'].values
-        res = talib.DIV(high, low)
+        high = self.df[inputs[0]].values
+        low = self.df[inputs[1]].values
+        res = talib.DIV(high, low, **kwargs)
         return pd.Series(res, index=self.df.index, name='DIV')
 
-    def max(self, timeperiod=30) -> pd.Series:
+    def max(self, inputs, **kwargs) -> pd.Series:
         """
         Highest value over a specified period
 
@@ -1303,11 +1297,11 @@ class TalibIndicators:
         Returns:
             pd.Series: The calculated indicator(s).
         """
-        close = self.df['close'].values
-        res = talib.MAX(close, timeperiod=timeperiod)
+        close = self.df[inputs[0]].values
+        res = talib.MAX(close, **kwargs)
         return pd.Series(res, index=self.df.index, name='MAX')
 
-    def maxindex(self, timeperiod=30) -> pd.Series:
+    def maxindex(self, inputs, **kwargs) -> pd.Series:
         """
         Index of highest value over a specified period
 
@@ -1317,11 +1311,11 @@ class TalibIndicators:
         Returns:
             pd.Series: The calculated indicator(s).
         """
-        close = self.df['close'].values
-        res = talib.MAXINDEX(close, timeperiod=timeperiod)
+        close = self.df[inputs[0]].values
+        res = talib.MAXINDEX(close, **kwargs)
         return pd.Series(res, index=self.df.index, name='MAXINDEX')
 
-    def min(self, timeperiod=30) -> pd.Series:
+    def min(self, inputs, **kwargs) -> pd.Series:
         """
         Lowest value over a specified period
 
@@ -1331,11 +1325,11 @@ class TalibIndicators:
         Returns:
             pd.Series: The calculated indicator(s).
         """
-        close = self.df['close'].values
-        res = talib.MIN(close, timeperiod=timeperiod)
+        close = self.df[inputs[0]].values
+        res = talib.MIN(close, **kwargs)
         return pd.Series(res, index=self.df.index, name='MIN')
 
-    def minindex(self, timeperiod=30) -> pd.Series:
+    def minindex(self, inputs, **kwargs) -> pd.Series:
         """
         Index of lowest value over a specified period
 
@@ -1345,11 +1339,11 @@ class TalibIndicators:
         Returns:
             pd.Series: The calculated indicator(s).
         """
-        close = self.df['close'].values
-        res = talib.MININDEX(close, timeperiod=timeperiod)
+        close = self.df[inputs[0]].values
+        res = talib.MININDEX(close, **kwargs)
         return pd.Series(res, index=self.df.index, name='MININDEX')
 
-    def minmax(self, timeperiod=30) -> tuple[pd.Series, pd.Series]:
+    def minmax(self, inputs, **kwargs) -> tuple[pd.Series, pd.Series]:
         """
         Lowest and highest values over a specified period
 
@@ -1359,11 +1353,11 @@ class TalibIndicators:
         Returns:
             tuple[pd.Series, pd.Series]: The calculated indicator(s).
         """
-        close = self.df['close'].values
-        min_val, max_val = talib.MINMAX(close, timeperiod=timeperiod)
+        close = self.df[inputs[0]].values
+        min_val, max_val = talib.MINMAX(close, **kwargs)
         return (pd.Series(min_val, index=self.df.index, name='min'), pd.Series(max_val, index=self.df.index, name='max'))
 
-    def minmaxindex(self, timeperiod=30) -> tuple[pd.Series, pd.Series]:
+    def minmaxindex(self, inputs, **kwargs) -> tuple[pd.Series, pd.Series]:
         """
         Indexes of lowest and highest values over a specified period
 
@@ -1373,35 +1367,35 @@ class TalibIndicators:
         Returns:
             tuple[pd.Series, pd.Series]: The calculated indicator(s).
         """
-        close = self.df['close'].values
-        minidx, maxidx = talib.MINMAXINDEX(close, timeperiod=timeperiod)
+        close = self.df[inputs[0]].values
+        minidx, maxidx = talib.MINMAXINDEX(close, **kwargs)
         return (pd.Series(minidx, index=self.df.index, name='minidx'), pd.Series(maxidx, index=self.df.index, name='maxidx'))
 
-    def mult(self) -> pd.Series:
+    def mult(self, inputs, **kwargs) -> pd.Series:
         """
         Vector Arithmetic Mult
 
         Returns:
             pd.Series: The calculated indicator(s).
         """
-        high = self.df['high'].values
-        low = self.df['low'].values
-        res = talib.MULT(high, low)
+        high = self.df[inputs[0]].values
+        low = self.df[inputs[1]].values
+        res = talib.MULT(high, low, **kwargs)
         return pd.Series(res, index=self.df.index, name='MULT')
 
-    def sub(self) -> pd.Series:
+    def sub(self, inputs, **kwargs) -> pd.Series:
         """
         Vector Arithmetic Substraction
 
         Returns:
             pd.Series: The calculated indicator(s).
         """
-        high = self.df['high'].values
-        low = self.df['low'].values
-        res = talib.SUB(high, low)
+        high = self.df[inputs[0]].values
+        low = self.df[inputs[1]].values
+        res = talib.SUB(high, low, **kwargs)
         return pd.Series(res, index=self.df.index, name='SUB')
 
-    def sum(self, timeperiod=30) -> pd.Series:
+    def sum(self, inputs, **kwargs) -> pd.Series:
         """
         Summation
 
@@ -1411,90 +1405,90 @@ class TalibIndicators:
         Returns:
             pd.Series: The calculated indicator(s).
         """
-        close = self.df['close'].values
-        res = talib.SUM(close, timeperiod=timeperiod)
+        close = self.df[inputs[0]].values
+        res = talib.SUM(close, **kwargs)
         return pd.Series(res, index=self.df.index, name='SUM')
 
     # PATTERN RECOGNITION
 
-    def cdl2crows(self) -> pd.Series:
+    def cdl2crows(self, inputs, **kwargs) -> pd.Series:
         """
         Two Crows
 
         Returns:
             pd.Series: The calculated indicator(s).
         """
-        open_, high, low, close = self.df['open'].values, self.df['high'].values, self.df['low'].values, self.df['close'].values
-        res = talib.CDL2CROWS(open_, high, low, close)
+        open_, high, low, close = self.df[inputs[0]].values, self.df[inputs[1]].values, self.df[inputs[2]].values, self.df[inputs[3]].values
+        res = talib.CDL2CROWS(open_, high, low, close, **kwargs)
         return pd.Series(res, index=self.df.index, name='CDL2CROWS')
 
-    def cdl3blackcrows(self) -> pd.Series:
+    def cdl3blackcrows(self, inputs, **kwargs) -> pd.Series:
         """
         Three Black Crows
 
         Returns:
             pd.Series: The calculated indicator(s).
         """
-        open_, high, low, close = self.df['open'].values, self.df['high'].values, self.df['low'].values, self.df['close'].values
-        res = talib.CDL3BLACKCROWS(open_, high, low, close)
+        open_, high, low, close = self.df[inputs[0]].values, self.df[inputs[1]].values, self.df[inputs[2]].values, self.df[inputs[3]].values
+        res = talib.CDL3BLACKCROWS(open_, high, low, close, **kwargs)
         return pd.Series(res, index=self.df.index, name='CDL3BLACKCROWS')
 
-    def cdl3inside(self) -> pd.Series:
+    def cdl3inside(self, inputs, **kwargs) -> pd.Series:
         """
         Three Inside Up/Down
 
         Returns:
             pd.Series: The calculated indicator(s).
         """
-        open_, high, low, close = self.df['open'].values, self.df['high'].values, self.df['low'].values, self.df['close'].values
-        res = talib.CDL3INSIDE(open_, high, low, close)
+        open_, high, low, close = self.df[inputs[0]].values, self.df[inputs[1]].values, self.df[inputs[2]].values, self.df[inputs[3]].values
+        res = talib.CDL3INSIDE(open_, high, low, close, **kwargs)
         return pd.Series(res, index=self.df.index, name='CDL3INSIDE')
 
-    def cdl3linestrike(self) -> pd.Series:
+    def cdl3linestrike(self, inputs, **kwargs) -> pd.Series:
         """
         Three-Line Strike
 
         Returns:
             pd.Series: The calculated indicator(s).
         """
-        open_, high, low, close = self.df['open'].values, self.df['high'].values, self.df['low'].values, self.df['close'].values
-        res = talib.CDL3LINESTRIKE(open_, high, low, close)
+        open_, high, low, close = self.df[inputs[0]].values, self.df[inputs[1]].values, self.df[inputs[2]].values, self.df[inputs[3]].values
+        res = talib.CDL3LINESTRIKE(open_, high, low, close, **kwargs)
         return pd.Series(res, index=self.df.index, name='CDL3LINESTRIKE')
 
-    def cdl3outside(self) -> pd.Series:
+    def cdl3outside(self, inputs, **kwargs) -> pd.Series:
         """
         Three Outside Up/Down
 
         Returns:
             pd.Series: The calculated indicator(s).
         """
-        open_, high, low, close = self.df['open'].values, self.df['high'].values, self.df['low'].values, self.df['close'].values
-        res = talib.CDL3OUTSIDE(open_, high, low, close)
+        open_, high, low, close = self.df[inputs[0]].values, self.df[inputs[1]].values, self.df[inputs[2]].values, self.df[inputs[3]].values
+        res = talib.CDL3OUTSIDE(open_, high, low, close, **kwargs)
         return pd.Series(res, index=self.df.index, name='CDL3OUTSIDE')
 
-    def cdl3starsinsouth(self) -> pd.Series:
+    def cdl3starsinsouth(self, inputs, **kwargs) -> pd.Series:
         """
         Three Stars In The South
 
         Returns:
             pd.Series: The calculated indicator(s).
         """
-        open_, high, low, close = self.df['open'].values, self.df['high'].values, self.df['low'].values, self.df['close'].values
-        res = talib.CDL3STARSINSOUTH(open_, high, low, close)
+        open_, high, low, close = self.df[inputs[0]].values, self.df[inputs[1]].values, self.df[inputs[2]].values, self.df[inputs[3]].values
+        res = talib.CDL3STARSINSOUTH(open_, high, low, close, **kwargs)
         return pd.Series(res, index=self.df.index, name='CDL3STARSINSOUTH')
 
-    def cdl3whitesoldiers(self) -> pd.Series:
+    def cdl3whitesoldiers(self, inputs, **kwargs) -> pd.Series:
         """
         Three Advancing White Soldiers
 
         Returns:
             pd.Series: The calculated indicator(s).
         """
-        open_, high, low, close = self.df['open'].values, self.df['high'].values, self.df['low'].values, self.df['close'].values
-        res = talib.CDL3WHITESOLDIERS(open_, high, low, close)
+        open_, high, low, close = self.df[inputs[0]].values, self.df[inputs[1]].values, self.df[inputs[2]].values, self.df[inputs[3]].values
+        res = talib.CDL3WHITESOLDIERS(open_, high, low, close, **kwargs)
         return pd.Series(res, index=self.df.index, name='CDL3WHITESOLDIERS')
 
-    def cdlabandonedbaby(self, penetration=0.3) -> pd.Series:
+    def cdlabandonedbaby(self, inputs, **kwargs) -> pd.Series:
         """
         Abandoned Baby
 
@@ -1504,77 +1498,77 @@ class TalibIndicators:
         Returns:
             pd.Series: The calculated indicator(s).
         """
-        open_, high, low, close = self.df['open'].values, self.df['high'].values, self.df['low'].values, self.df['close'].values
-        res = talib.CDLABANDONEDBABY(open_, high, low, close, penetration=penetration)
+        open_, high, low, close = self.df[inputs[0]].values, self.df[inputs[1]].values, self.df[inputs[2]].values, self.df[inputs[3]].values
+        res = talib.CDLABANDONEDBABY(open_, high, low, close, **kwargs)
         return pd.Series(res, index=self.df.index, name='CDLABANDONEDBABY')
 
-    def cdladvanceblock(self) -> pd.Series:
+    def cdladvanceblock(self, inputs, **kwargs) -> pd.Series:
         """
         Advance Block
 
         Returns:
             pd.Series: The calculated indicator(s).
         """
-        open_, high, low, close = self.df['open'].values, self.df['high'].values, self.df['low'].values, self.df['close'].values
-        res = talib.CDLADVANCEBLOCK(open_, high, low, close)
+        open_, high, low, close = self.df[inputs[0]].values, self.df[inputs[1]].values, self.df[inputs[2]].values, self.df[inputs[3]].values
+        res = talib.CDLADVANCEBLOCK(open_, high, low, close, **kwargs)
         return pd.Series(res, index=self.df.index, name='CDLADVANCEBLOCK')
 
-    def cdlbelthold(self) -> pd.Series:
+    def cdlbelthold(self, inputs, **kwargs) -> pd.Series:
         """
         Belt-hold
 
         Returns:
             pd.Series: The calculated indicator(s).
         """
-        open_, high, low, close = self.df['open'].values, self.df['high'].values, self.df['low'].values, self.df['close'].values
-        res = talib.CDLBELTHOLD(open_, high, low, close)
+        open_, high, low, close = self.df[inputs[0]].values, self.df[inputs[1]].values, self.df[inputs[2]].values, self.df[inputs[3]].values
+        res = talib.CDLBELTHOLD(open_, high, low, close, **kwargs)
         return pd.Series(res, index=self.df.index, name='CDLBELTHOLD')
 
-    def cdlbreakaway(self) -> pd.Series:
+    def cdlbreakaway(self, inputs, **kwargs) -> pd.Series:
         """
         Breakaway
 
         Returns:
             pd.Series: The calculated indicator(s).
         """
-        open_, high, low, close = self.df['open'].values, self.df['high'].values, self.df['low'].values, self.df['close'].values
-        res = talib.CDLBREAKAWAY(open_, high, low, close)
+        open_, high, low, close = self.df[inputs[0]].values, self.df[inputs[1]].values, self.df[inputs[2]].values, self.df[inputs[3]].values
+        res = talib.CDLBREAKAWAY(open_, high, low, close, **kwargs)
         return pd.Series(res, index=self.df.index, name='CDLBREAKAWAY')
 
-    def cdlclosingmarubozu(self) -> pd.Series:
+    def cdlclosingmarubozu(self, inputs, **kwargs) -> pd.Series:
         """
         Closing Marubozu
 
         Returns:
             pd.Series: The calculated indicator(s).
         """
-        open_, high, low, close = self.df['open'].values, self.df['high'].values, self.df['low'].values, self.df['close'].values
-        res = talib.CDLCLOSINGMARUBOZU(open_, high, low, close)
+        open_, high, low, close = self.df[inputs[0]].values, self.df[inputs[1]].values, self.df[inputs[2]].values, self.df[inputs[3]].values
+        res = talib.CDLCLOSINGMARUBOZU(open_, high, low, close, **kwargs)
         return pd.Series(res, index=self.df.index, name='CDLCLOSINGMARUBOZU')
 
-    def cdlconcealbabyswall(self) -> pd.Series:
+    def cdlconcealbabyswall(self, inputs, **kwargs) -> pd.Series:
         """
         Concealing Baby Swallow
 
         Returns:
             pd.Series: The calculated indicator(s).
         """
-        open_, high, low, close = self.df['open'].values, self.df['high'].values, self.df['low'].values, self.df['close'].values
-        res = talib.CDLCONCEALBABYSWALL(open_, high, low, close)
+        open_, high, low, close = self.df[inputs[0]].values, self.df[inputs[1]].values, self.df[inputs[2]].values, self.df[inputs[3]].values
+        res = talib.CDLCONCEALBABYSWALL(open_, high, low, close, **kwargs)
         return pd.Series(res, index=self.df.index, name='CDLCONCEALBABYSWALL')
 
-    def cdlcounterattack(self) -> pd.Series:
+    def cdlcounterattack(self, inputs, **kwargs) -> pd.Series:
         """
         Counterattack
 
         Returns:
             pd.Series: The calculated indicator(s).
         """
-        open_, high, low, close = self.df['open'].values, self.df['high'].values, self.df['low'].values, self.df['close'].values
-        res = talib.CDLCOUNTERATTACK(open_, high, low, close)
+        open_, high, low, close = self.df[inputs[0]].values, self.df[inputs[1]].values, self.df[inputs[2]].values, self.df[inputs[3]].values
+        res = talib.CDLCOUNTERATTACK(open_, high, low, close, **kwargs)
         return pd.Series(res, index=self.df.index, name='CDLCOUNTERATTACK')
 
-    def cdldarkcloudcover(self, penetration=0.5) -> pd.Series:
+    def cdldarkcloudcover(self, inputs, **kwargs) -> pd.Series:
         """
         Dark Cloud Cover
 
@@ -1584,55 +1578,55 @@ class TalibIndicators:
         Returns:
             pd.Series: The calculated indicator(s).
         """
-        open_, high, low, close = self.df['open'].values, self.df['high'].values, self.df['low'].values, self.df['close'].values
-        res = talib.CDLDARKCLOUDCOVER(open_, high, low, close, penetration=penetration)
+        open_, high, low, close = self.df[inputs[0]].values, self.df[inputs[1]].values, self.df[inputs[2]].values, self.df[inputs[3]].values
+        res = talib.CDLDARKCLOUDCOVER(open_, high, low, close, **kwargs)
         return pd.Series(res, index=self.df.index, name='CDLDARKCLOUDCOVER')
 
-    def cdldoji(self) -> pd.Series:
+    def cdldoji(self, inputs, **kwargs) -> pd.Series:
         """
         Doji
 
         Returns:
             pd.Series: The calculated indicator(s).
         """
-        open_, high, low, close = self.df['open'].values, self.df['high'].values, self.df['low'].values, self.df['close'].values
-        res = talib.CDLDOJI(open_, high, low, close)
+        open_, high, low, close = self.df[inputs[0]].values, self.df[inputs[1]].values, self.df[inputs[2]].values, self.df[inputs[3]].values
+        res = talib.CDLDOJI(open_, high, low, close, **kwargs)
         return pd.Series(res, index=self.df.index, name='CDLDOJI')
 
-    def cdldojistar(self) -> pd.Series:
+    def cdldojistar(self, inputs, **kwargs) -> pd.Series:
         """
         Doji Star
 
         Returns:
             pd.Series: The calculated indicator(s).
         """
-        open_, high, low, close = self.df['open'].values, self.df['high'].values, self.df['low'].values, self.df['close'].values
-        res = talib.CDLDOJISTAR(open_, high, low, close)
+        open_, high, low, close = self.df[inputs[0]].values, self.df[inputs[1]].values, self.df[inputs[2]].values, self.df[inputs[3]].values
+        res = talib.CDLDOJISTAR(open_, high, low, close, **kwargs)
         return pd.Series(res, index=self.df.index, name='CDLDOJISTAR')
 
-    def cdldragonflydoji(self) -> pd.Series:
+    def cdldragonflydoji(self, inputs, **kwargs) -> pd.Series:
         """
         Dragonfly Doji
 
         Returns:
             pd.Series: The calculated indicator(s).
         """
-        open_, high, low, close = self.df['open'].values, self.df['high'].values, self.df['low'].values, self.df['close'].values
-        res = talib.CDLDRAGONFLYDOJI(open_, high, low, close)
+        open_, high, low, close = self.df[inputs[0]].values, self.df[inputs[1]].values, self.df[inputs[2]].values, self.df[inputs[3]].values
+        res = talib.CDLDRAGONFLYDOJI(open_, high, low, close, **kwargs)
         return pd.Series(res, index=self.df.index, name='CDLDRAGONFLYDOJI')
 
-    def cdlengulfing(self) -> pd.Series:
+    def cdlengulfing(self, inputs, **kwargs) -> pd.Series:
         """
         Engulfing Pattern
 
         Returns:
             pd.Series: The calculated indicator(s).
         """
-        open_, high, low, close = self.df['open'].values, self.df['high'].values, self.df['low'].values, self.df['close'].values
-        res = talib.CDLENGULFING(open_, high, low, close)
+        open_, high, low, close = self.df[inputs[0]].values, self.df[inputs[1]].values, self.df[inputs[2]].values, self.df[inputs[3]].values
+        res = talib.CDLENGULFING(open_, high, low, close, **kwargs)
         return pd.Series(res, index=self.df.index, name='CDLENGULFING')
 
-    def cdleveningdojistar(self, penetration=0.3) -> pd.Series:
+    def cdleveningdojistar(self, inputs, **kwargs) -> pd.Series:
         """
         Evening Doji Star
 
@@ -1642,11 +1636,11 @@ class TalibIndicators:
         Returns:
             pd.Series: The calculated indicator(s).
         """
-        open_, high, low, close = self.df['open'].values, self.df['high'].values, self.df['low'].values, self.df['close'].values
-        res = talib.CDLEVENINGDOJISTAR(open_, high, low, close, penetration=penetration)
+        open_, high, low, close = self.df[inputs[0]].values, self.df[inputs[1]].values, self.df[inputs[2]].values, self.df[inputs[3]].values
+        res = talib.CDLEVENINGDOJISTAR(open_, high, low, close, **kwargs)
         return pd.Series(res, index=self.df.index, name='CDLEVENINGDOJISTAR')
 
-    def cdleveningstar(self, penetration=0.3) -> pd.Series:
+    def cdleveningstar(self, inputs, **kwargs) -> pd.Series:
         """
         Evening Star
 
@@ -1656,231 +1650,231 @@ class TalibIndicators:
         Returns:
             pd.Series: The calculated indicator(s).
         """
-        open_, high, low, close = self.df['open'].values, self.df['high'].values, self.df['low'].values, self.df['close'].values
-        res = talib.CDLEVENINGSTAR(open_, high, low, close, penetration=penetration)
+        open_, high, low, close = self.df[inputs[0]].values, self.df[inputs[1]].values, self.df[inputs[2]].values, self.df[inputs[3]].values
+        res = talib.CDLEVENINGSTAR(open_, high, low, close, **kwargs)
         return pd.Series(res, index=self.df.index, name='CDLEVENINGSTAR')
 
-    def cdlgapsidesidewhite(self) -> pd.Series:
+    def cdlgapsidesidewhite(self, inputs, **kwargs) -> pd.Series:
         """
         Up/Down-gap side-by-side white lines
 
         Returns:
             pd.Series: The calculated indicator(s).
         """
-        open_, high, low, close = self.df['open'].values, self.df['high'].values, self.df['low'].values, self.df['close'].values
-        res = talib.CDLGAPSIDESIDEWHITE(open_, high, low, close)
+        open_, high, low, close = self.df[inputs[0]].values, self.df[inputs[1]].values, self.df[inputs[2]].values, self.df[inputs[3]].values
+        res = talib.CDLGAPSIDESIDEWHITE(open_, high, low, close, **kwargs)
         return pd.Series(res, index=self.df.index, name='CDLGAPSIDESIDEWHITE')
 
-    def cdlgravestonedoji(self) -> pd.Series:
+    def cdlgravestonedoji(self, inputs, **kwargs) -> pd.Series:
         """
         Gravestone Doji
 
         Returns:
             pd.Series: The calculated indicator(s).
         """
-        open_, high, low, close = self.df['open'].values, self.df['high'].values, self.df['low'].values, self.df['close'].values
-        res = talib.CDLGRAVESTONEDOJI(open_, high, low, close)
+        open_, high, low, close = self.df[inputs[0]].values, self.df[inputs[1]].values, self.df[inputs[2]].values, self.df[inputs[3]].values
+        res = talib.CDLGRAVESTONEDOJI(open_, high, low, close, **kwargs)
         return pd.Series(res, index=self.df.index, name='CDLGRAVESTONEDOJI')
 
-    def cdlhammer(self) -> pd.Series:
+    def cdlhammer(self, inputs, **kwargs) -> pd.Series:
         """
         Hammer
 
         Returns:
             pd.Series: The calculated indicator(s).
         """
-        open_, high, low, close = self.df['open'].values, self.df['high'].values, self.df['low'].values, self.df['close'].values
-        res = talib.CDLHAMMER(open_, high, low, close)
+        open_, high, low, close = self.df[inputs[0]].values, self.df[inputs[1]].values, self.df[inputs[2]].values, self.df[inputs[3]].values
+        res = talib.CDLHAMMER(open_, high, low, close, **kwargs)
         return pd.Series(res, index=self.df.index, name='CDLHAMMER')
 
-    def cdlhangingman(self) -> pd.Series:
+    def cdlhangingman(self, inputs, **kwargs) -> pd.Series:
         """
         Hanging Man
 
         Returns:
             pd.Series: The calculated indicator(s).
         """
-        open_, high, low, close = self.df['open'].values, self.df['high'].values, self.df['low'].values, self.df['close'].values
-        res = talib.CDLHANGINGMAN(open_, high, low, close)
+        open_, high, low, close = self.df[inputs[0]].values, self.df[inputs[1]].values, self.df[inputs[2]].values, self.df[inputs[3]].values
+        res = talib.CDLHANGINGMAN(open_, high, low, close, **kwargs)
         return pd.Series(res, index=self.df.index, name='CDLHANGINGMAN')
 
-    def cdlharami(self) -> pd.Series:
+    def cdlharami(self, inputs, **kwargs) -> pd.Series:
         """
         Harami Pattern
 
         Returns:
             pd.Series: The calculated indicator(s).
         """
-        open_, high, low, close = self.df['open'].values, self.df['high'].values, self.df['low'].values, self.df['close'].values
-        res = talib.CDLHARAMI(open_, high, low, close)
+        open_, high, low, close = self.df[inputs[0]].values, self.df[inputs[1]].values, self.df[inputs[2]].values, self.df[inputs[3]].values
+        res = talib.CDLHARAMI(open_, high, low, close, **kwargs)
         return pd.Series(res, index=self.df.index, name='CDLHARAMI')
 
-    def cdlharamicross(self) -> pd.Series:
+    def cdlharamicross(self, inputs, **kwargs) -> pd.Series:
         """
         Harami Cross Pattern
 
         Returns:
             pd.Series: The calculated indicator(s).
         """
-        open_, high, low, close = self.df['open'].values, self.df['high'].values, self.df['low'].values, self.df['close'].values
-        res = talib.CDLHARAMICROSS(open_, high, low, close)
+        open_, high, low, close = self.df[inputs[0]].values, self.df[inputs[1]].values, self.df[inputs[2]].values, self.df[inputs[3]].values
+        res = talib.CDLHARAMICROSS(open_, high, low, close, **kwargs)
         return pd.Series(res, index=self.df.index, name='CDLHARAMICROSS')
 
-    def cdlhighwave(self) -> pd.Series:
+    def cdlhighwave(self, inputs, **kwargs) -> pd.Series:
         """
         High-Wave Candle
 
         Returns:
             pd.Series: The calculated indicator(s).
         """
-        open_, high, low, close = self.df['open'].values, self.df['high'].values, self.df['low'].values, self.df['close'].values
-        res = talib.CDLHIGHWAVE(open_, high, low, close)
+        open_, high, low, close = self.df[inputs[0]].values, self.df[inputs[1]].values, self.df[inputs[2]].values, self.df[inputs[3]].values
+        res = talib.CDLHIGHWAVE(open_, high, low, close, **kwargs)
         return pd.Series(res, index=self.df.index, name='CDLHIGHWAVE')
 
-    def cdlhikkake(self) -> pd.Series:
+    def cdlhikkake(self, inputs, **kwargs) -> pd.Series:
         """
         Hikkake Pattern
 
         Returns:
             pd.Series: The calculated indicator(s).
         """
-        open_, high, low, close = self.df['open'].values, self.df['high'].values, self.df['low'].values, self.df['close'].values
-        res = talib.CDLHIKKAKE(open_, high, low, close)
+        open_, high, low, close = self.df[inputs[0]].values, self.df[inputs[1]].values, self.df[inputs[2]].values, self.df[inputs[3]].values
+        res = talib.CDLHIKKAKE(open_, high, low, close, **kwargs)
         return pd.Series(res, index=self.df.index, name='CDLHIKKAKE')
 
-    def cdlhikkakemod(self) -> pd.Series:
+    def cdlhikkakemod(self, inputs, **kwargs) -> pd.Series:
         """
         Modified Hikkake Pattern
 
         Returns:
             pd.Series: The calculated indicator(s).
         """
-        open_, high, low, close = self.df['open'].values, self.df['high'].values, self.df['low'].values, self.df['close'].values
-        res = talib.CDLHIKKAKEMOD(open_, high, low, close)
+        open_, high, low, close = self.df[inputs[0]].values, self.df[inputs[1]].values, self.df[inputs[2]].values, self.df[inputs[3]].values
+        res = talib.CDLHIKKAKEMOD(open_, high, low, close, **kwargs)
         return pd.Series(res, index=self.df.index, name='CDLHIKKAKEMOD')
 
-    def cdlhomingpigeon(self) -> pd.Series:
+    def cdlhomingpigeon(self, inputs, **kwargs) -> pd.Series:
         """
         Homing Pigeon
 
         Returns:
             pd.Series: The calculated indicator(s).
         """
-        open_, high, low, close = self.df['open'].values, self.df['high'].values, self.df['low'].values, self.df['close'].values
-        res = talib.CDLHOMINGPIGEON(open_, high, low, close)
+        open_, high, low, close = self.df[inputs[0]].values, self.df[inputs[1]].values, self.df[inputs[2]].values, self.df[inputs[3]].values
+        res = talib.CDLHOMINGPIGEON(open_, high, low, close, **kwargs)
         return pd.Series(res, index=self.df.index, name='CDLHOMINGPIGEON')
 
-    def cdlidentical3crows(self) -> pd.Series:
+    def cdlidentical3crows(self, inputs, **kwargs) -> pd.Series:
         """
         Identical Three Crows
 
         Returns:
             pd.Series: The calculated indicator(s).
         """
-        open_, high, low, close = self.df['open'].values, self.df['high'].values, self.df['low'].values, self.df['close'].values
-        res = talib.CDLIDENTICAL3CROWS(open_, high, low, close)
+        open_, high, low, close = self.df[inputs[0]].values, self.df[inputs[1]].values, self.df[inputs[2]].values, self.df[inputs[3]].values
+        res = talib.CDLIDENTICAL3CROWS(open_, high, low, close, **kwargs)
         return pd.Series(res, index=self.df.index, name='CDLIDENTICAL3CROWS')
 
-    def cdlinneck(self) -> pd.Series:
+    def cdlinneck(self, inputs, **kwargs) -> pd.Series:
         """
         In-Neck Pattern
 
         Returns:
             pd.Series: The calculated indicator(s).
         """
-        open_, high, low, close = self.df['open'].values, self.df['high'].values, self.df['low'].values, self.df['close'].values
-        res = talib.CDLINNECK(open_, high, low, close)
+        open_, high, low, close = self.df[inputs[0]].values, self.df[inputs[1]].values, self.df[inputs[2]].values, self.df[inputs[3]].values
+        res = talib.CDLINNECK(open_, high, low, close, **kwargs)
         return pd.Series(res, index=self.df.index, name='CDLINNECK')
 
-    def cdlinvertedhammer(self) -> pd.Series:
+    def cdlinvertedhammer(self, inputs, **kwargs) -> pd.Series:
         """
         Inverted Hammer
 
         Returns:
             pd.Series: The calculated indicator(s).
         """
-        open_, high, low, close = self.df['open'].values, self.df['high'].values, self.df['low'].values, self.df['close'].values
-        res = talib.CDLINVERTEDHAMMER(open_, high, low, close)
+        open_, high, low, close = self.df[inputs[0]].values, self.df[inputs[1]].values, self.df[inputs[2]].values, self.df[inputs[3]].values
+        res = talib.CDLINVERTEDHAMMER(open_, high, low, close, **kwargs)
         return pd.Series(res, index=self.df.index, name='CDLINVERTEDHAMMER')
 
-    def cdlkicking(self) -> pd.Series:
+    def cdlkicking(self, inputs, **kwargs) -> pd.Series:
         """
         Kicking
 
         Returns:
             pd.Series: The calculated indicator(s).
         """
-        open_, high, low, close = self.df['open'].values, self.df['high'].values, self.df['low'].values, self.df['close'].values
-        res = talib.CDLKICKING(open_, high, low, close)
+        open_, high, low, close = self.df[inputs[0]].values, self.df[inputs[1]].values, self.df[inputs[2]].values, self.df[inputs[3]].values
+        res = talib.CDLKICKING(open_, high, low, close, **kwargs)
         return pd.Series(res, index=self.df.index, name='CDLKICKING')
 
-    def cdlkickingbylength(self) -> pd.Series:
+    def cdlkickingbylength(self, inputs, **kwargs) -> pd.Series:
         """
         Kicking - bull/bear determined by the longer marubozu
 
         Returns:
             pd.Series: The calculated indicator(s).
         """
-        open_, high, low, close = self.df['open'].values, self.df['high'].values, self.df['low'].values, self.df['close'].values
-        res = talib.CDLKICKINGBYLENGTH(open_, high, low, close)
+        open_, high, low, close = self.df[inputs[0]].values, self.df[inputs[1]].values, self.df[inputs[2]].values, self.df[inputs[3]].values
+        res = talib.CDLKICKINGBYLENGTH(open_, high, low, close, **kwargs)
         return pd.Series(res, index=self.df.index, name='CDLKICKINGBYLENGTH')
 
-    def cdlladderbottom(self) -> pd.Series:
+    def cdlladderbottom(self, inputs, **kwargs) -> pd.Series:
         """
         Ladder Bottom
 
         Returns:
             pd.Series: The calculated indicator(s).
         """
-        open_, high, low, close = self.df['open'].values, self.df['high'].values, self.df['low'].values, self.df['close'].values
-        res = talib.CDLLADDERBOTTOM(open_, high, low, close)
+        open_, high, low, close = self.df[inputs[0]].values, self.df[inputs[1]].values, self.df[inputs[2]].values, self.df[inputs[3]].values
+        res = talib.CDLLADDERBOTTOM(open_, high, low, close, **kwargs)
         return pd.Series(res, index=self.df.index, name='CDLLADDERBOTTOM')
 
-    def cdllongleggeddoji(self) -> pd.Series:
+    def cdllongleggeddoji(self, inputs, **kwargs) -> pd.Series:
         """
         Long Legged Doji
 
         Returns:
             pd.Series: The calculated indicator(s).
         """
-        open_, high, low, close = self.df['open'].values, self.df['high'].values, self.df['low'].values, self.df['close'].values
-        res = talib.CDLLONGLEGGEDDOJI(open_, high, low, close)
+        open_, high, low, close = self.df[inputs[0]].values, self.df[inputs[1]].values, self.df[inputs[2]].values, self.df[inputs[3]].values
+        res = talib.CDLLONGLEGGEDDOJI(open_, high, low, close, **kwargs)
         return pd.Series(res, index=self.df.index, name='CDLLONGLEGGEDDOJI')
 
-    def cdllongline(self) -> pd.Series:
+    def cdllongline(self, inputs, **kwargs) -> pd.Series:
         """
         Long Line Candle
 
         Returns:
             pd.Series: The calculated indicator(s).
         """
-        open_, high, low, close = self.df['open'].values, self.df['high'].values, self.df['low'].values, self.df['close'].values
-        res = talib.CDLLONGLINE(open_, high, low, close)
+        open_, high, low, close = self.df[inputs[0]].values, self.df[inputs[1]].values, self.df[inputs[2]].values, self.df[inputs[3]].values
+        res = talib.CDLLONGLINE(open_, high, low, close, **kwargs)
         return pd.Series(res, index=self.df.index, name='CDLLONGLINE')
 
-    def cdlmarubozu(self) -> pd.Series:
+    def cdlmarubozu(self, inputs, **kwargs) -> pd.Series:
         """
         Marubozu
 
         Returns:
             pd.Series: The calculated indicator(s).
         """
-        open_, high, low, close = self.df['open'].values, self.df['high'].values, self.df['low'].values, self.df['close'].values
-        res = talib.CDLMARUBOZU(open_, high, low, close)
+        open_, high, low, close = self.df[inputs[0]].values, self.df[inputs[1]].values, self.df[inputs[2]].values, self.df[inputs[3]].values
+        res = talib.CDLMARUBOZU(open_, high, low, close, **kwargs)
         return pd.Series(res, index=self.df.index, name='CDLMARUBOZU')
 
-    def cdlmatchinglow(self) -> pd.Series:
+    def cdlmatchinglow(self, inputs, **kwargs) -> pd.Series:
         """
         Matching Low
 
         Returns:
             pd.Series: The calculated indicator(s).
         """
-        open_, high, low, close = self.df['open'].values, self.df['high'].values, self.df['low'].values, self.df['close'].values
-        res = talib.CDLMATCHINGLOW(open_, high, low, close)
+        open_, high, low, close = self.df[inputs[0]].values, self.df[inputs[1]].values, self.df[inputs[2]].values, self.df[inputs[3]].values
+        res = talib.CDLMATCHINGLOW(open_, high, low, close, **kwargs)
         return pd.Series(res, index=self.df.index, name='CDLMATCHINGLOW')
 
-    def cdlmathold(self, penetration=0.5) -> pd.Series:
+    def cdlmathold(self, inputs, **kwargs) -> pd.Series:
         """
         Mat Hold
 
@@ -1890,11 +1884,11 @@ class TalibIndicators:
         Returns:
             pd.Series: The calculated indicator(s).
         """
-        open_, high, low, close = self.df['open'].values, self.df['high'].values, self.df['low'].values, self.df['close'].values
-        res = talib.CDLMATHOLD(open_, high, low, close, penetration=penetration)
+        open_, high, low, close = self.df[inputs[0]].values, self.df[inputs[1]].values, self.df[inputs[2]].values, self.df[inputs[3]].values
+        res = talib.CDLMATHOLD(open_, high, low, close, **kwargs)
         return pd.Series(res, index=self.df.index, name='CDLMATHOLD')
 
-    def cdlmorningdojistar(self, penetration=0.3) -> pd.Series:
+    def cdlmorningdojistar(self, inputs, **kwargs) -> pd.Series:
         """
         Morning Doji Star
 
@@ -1904,11 +1898,11 @@ class TalibIndicators:
         Returns:
             pd.Series: The calculated indicator(s).
         """
-        open_, high, low, close = self.df['open'].values, self.df['high'].values, self.df['low'].values, self.df['close'].values
-        res = talib.CDLMORNINGDOJISTAR(open_, high, low, close, penetration=penetration)
+        open_, high, low, close = self.df[inputs[0]].values, self.df[inputs[1]].values, self.df[inputs[2]].values, self.df[inputs[3]].values
+        res = talib.CDLMORNINGDOJISTAR(open_, high, low, close, **kwargs)
         return pd.Series(res, index=self.df.index, name='CDLMORNINGDOJISTAR')
 
-    def cdlmorningstar(self, penetration=0.3) -> pd.Series:
+    def cdlmorningstar(self, inputs, **kwargs) -> pd.Series:
         """
         Morning Star
 
@@ -1918,229 +1912,244 @@ class TalibIndicators:
         Returns:
             pd.Series: The calculated indicator(s).
         """
-        open_, high, low, close = self.df['open'].values, self.df['high'].values, self.df['low'].values, self.df['close'].values
-        res = talib.CDLMORNINGSTAR(open_, high, low, close, penetration=penetration)
+        open_, high, low, close = self.df[inputs[0]].values, self.df[inputs[1]].values, self.df[inputs[2]].values, self.df[inputs[3]].values
+        res = talib.CDLMORNINGSTAR(open_, high, low, close, **kwargs)
         return pd.Series(res, index=self.df.index, name='CDLMORNINGSTAR')
 
-    def cdlonneck(self) -> pd.Series:
+    def cdlonneck(self, inputs, **kwargs) -> pd.Series:
         """
         On-Neck Pattern
 
         Returns:
             pd.Series: The calculated indicator(s).
         """
-        open_, high, low, close = self.df['open'].values, self.df['high'].values, self.df['low'].values, self.df['close'].values
-        res = talib.CDLONNECK(open_, high, low, close)
+        open_, high, low, close = self.df[inputs[0]].values, self.df[inputs[1]].values, self.df[inputs[2]].values, self.df[inputs[3]].values
+        res = talib.CDLONNECK(open_, high, low, close, **kwargs)
         return pd.Series(res, index=self.df.index, name='CDLONNECK')
 
-    def cdlpiercing(self) -> pd.Series:
+    def cdlpiercing(self, inputs, **kwargs) -> pd.Series:
         """
         Piercing Pattern
 
         Returns:
             pd.Series: The calculated indicator(s).
         """
-        open_, high, low, close = self.df['open'].values, self.df['high'].values, self.df['low'].values, self.df['close'].values
-        res = talib.CDLPIERCING(open_, high, low, close)
+        open_, high, low, close = self.df[inputs[0]].values, self.df[inputs[1]].values, self.df[inputs[2]].values, self.df[inputs[3]].values
+        res = talib.CDLPIERCING(open_, high, low, close, **kwargs)
         return pd.Series(res, index=self.df.index, name='CDLPIERCING')
 
-    def cdlrickshawman(self) -> pd.Series:
+    def cdlrickshawman(self, inputs, **kwargs) -> pd.Series:
         """
         Rickshaw Man
 
         Returns:
             pd.Series: The calculated indicator(s).
         """
-        open_, high, low, close = self.df['open'].values, self.df['high'].values, self.df['low'].values, self.df['close'].values
-        res = talib.CDLRICKSHAWMAN(open_, high, low, close)
+        open_, high, low, close = self.df[inputs[0]].values, self.df[inputs[1]].values, self.df[inputs[2]].values, self.df[inputs[3]].values
+        res = talib.CDLRICKSHAWMAN(open_, high, low, close, **kwargs)
         return pd.Series(res, index=self.df.index, name='CDLRICKSHAWMAN')
 
-    def cdlrisefall3methods(self) -> pd.Series:
+    def cdlrisefall3methods(self, inputs, **kwargs) -> pd.Series:
         """
         Rising/Falling Three Methods
 
         Returns:
             pd.Series: The calculated indicator(s).
         """
-        open_, high, low, close = self.df['open'].values, self.df['high'].values, self.df['low'].values, self.df['close'].values
-        res = talib.CDLRISEFALL3METHODS(open_, high, low, close)
+        open_, high, low, close = self.df[inputs[0]].values, self.df[inputs[1]].values, self.df[inputs[2]].values, self.df[inputs[3]].values
+        res = talib.CDLRISEFALL3METHODS(open_, high, low, close, **kwargs)
         return pd.Series(res, index=self.df.index, name='CDLRISEFALL3METHODS')
 
-    def cdlseparatinglines(self) -> pd.Series:
+    def cdlseparatinglines(self, inputs, **kwargs) -> pd.Series:
         """
         Separating Lines
 
         Returns:
             pd.Series: The calculated indicator(s).
         """
-        open_, high, low, close = self.df['open'].values, self.df['high'].values, self.df['low'].values, self.df['close'].values
-        res = talib.CDLSEPARATINGLINES(open_, high, low, close)
+        open_, high, low, close = self.df[inputs[0]].values, self.df[inputs[1]].values, self.df[inputs[2]].values, self.df[inputs[3]].values
+        res = talib.CDLSEPARATINGLINES(open_, high, low, close, **kwargs)
         return pd.Series(res, index=self.df.index, name='CDLSEPARATINGLINES')
 
-    def cdlshootingstar(self) -> pd.Series:
+    def cdlshootingstar(self, inputs, **kwargs) -> pd.Series:
         """
         Shooting Star
 
         Returns:
             pd.Series: The calculated indicator(s).
         """
-        open_, high, low, close = self.df['open'].values, self.df['high'].values, self.df['low'].values, self.df['close'].values
-        res = talib.CDLSHOOTINGSTAR(open_, high, low, close)
+        open_, high, low, close = self.df[inputs[0]].values, self.df[inputs[1]].values, self.df[inputs[2]].values, self.df[inputs[3]].values
+        res = talib.CDLSHOOTINGSTAR(open_, high, low, close, **kwargs)
         return pd.Series(res, index=self.df.index, name='CDLSHOOTINGSTAR')
 
-    def cdlshortline(self) -> pd.Series:
+    def cdlshortline(self, inputs, **kwargs) -> pd.Series:
         """
         Short Line Candle
 
         Returns:
             pd.Series: The calculated indicator(s).
         """
-        open_, high, low, close = self.df['open'].values, self.df['high'].values, self.df['low'].values, self.df['close'].values
-        res = talib.CDLSHORTLINE(open_, high, low, close)
+        open_, high, low, close = self.df[inputs[0]].values, self.df[inputs[1]].values, self.df[inputs[2]].values, self.df[inputs[3]].values
+        res = talib.CDLSHORTLINE(open_, high, low, close, **kwargs)
         return pd.Series(res, index=self.df.index, name='CDLSHORTLINE')
 
-    def cdlspinningtop(self) -> pd.Series:
+    def cdlspinningtop(self, inputs, **kwargs) -> pd.Series:
         """
         Spinning Top
 
         Returns:
             pd.Series: The calculated indicator(s).
         """
-        open_, high, low, close = self.df['open'].values, self.df['high'].values, self.df['low'].values, self.df['close'].values
-        res = talib.CDLSPINNINGTOP(open_, high, low, close)
+        open_, high, low, close = self.df[inputs[0]].values, self.df[inputs[1]].values, self.df[inputs[2]].values, self.df[inputs[3]].values
+        res = talib.CDLSPINNINGTOP(open_, high, low, close, **kwargs)
         return pd.Series(res, index=self.df.index, name='CDLSPINNINGTOP')
 
-    def cdlstalledpattern(self) -> pd.Series:
+    def cdlstalledpattern(self, inputs, **kwargs) -> pd.Series:
         """
         Stalled Pattern
 
         Returns:
             pd.Series: The calculated indicator(s).
         """
-        open_, high, low, close = self.df['open'].values, self.df['high'].values, self.df['low'].values, self.df['close'].values
-        res = talib.CDLSTALLEDPATTERN(open_, high, low, close)
+        open_, high, low, close = self.df[inputs[0]].values, self.df[inputs[1]].values, self.df[inputs[2]].values, self.df[inputs[3]].values
+        res = talib.CDLSTALLEDPATTERN(open_, high, low, close, **kwargs)
         return pd.Series(res, index=self.df.index, name='CDLSTALLEDPATTERN')
 
-    def cdlsticksandwich(self) -> pd.Series:
+    def cdlsticksandwich(self, inputs, **kwargs) -> pd.Series:
         """
         Stick Sandwich
 
         Returns:
             pd.Series: The calculated indicator(s).
         """
-        open_, high, low, close = self.df['open'].values, self.df['high'].values, self.df['low'].values, self.df['close'].values
-        res = talib.CDLSTICKSANDWICH(open_, high, low, close)
+        open_, high, low, close = self.df[inputs[0]].values, self.df[inputs[1]].values, self.df[inputs[2]].values, self.df[inputs[3]].values
+        res = talib.CDLSTICKSANDWICH(open_, high, low, close, **kwargs)
         return pd.Series(res, index=self.df.index, name='CDLSTICKSANDWICH')
 
-    def cdltakuri(self) -> pd.Series:
+    def cdltakuri(self, inputs, **kwargs) -> pd.Series:
         """
         Takuri (Dragonfly Doji with very long lower shadow)
 
         Returns:
             pd.Series: The calculated indicator(s).
         """
-        open_, high, low, close = self.df['open'].values, self.df['high'].values, self.df['low'].values, self.df['close'].values
-        res = talib.CDLTAKURI(open_, high, low, close)
+        open_, high, low, close = self.df[inputs[0]].values, self.df[inputs[1]].values, self.df[inputs[2]].values, self.df[inputs[3]].values
+        res = talib.CDLTAKURI(open_, high, low, close, **kwargs)
         return pd.Series(res, index=self.df.index, name='CDLTAKURI')
 
-    def cdltasukigap(self) -> pd.Series:
+    def cdltasukigap(self, inputs, **kwargs) -> pd.Series:
         """
         Tasuki Gap
 
         Returns:
             pd.Series: The calculated indicator(s).
         """
-        open_, high, low, close = self.df['open'].values, self.df['high'].values, self.df['low'].values, self.df['close'].values
-        res = talib.CDLTASUKIGAP(open_, high, low, close)
+        open_, high, low, close = self.df[inputs[0]].values, self.df[inputs[1]].values, self.df[inputs[2]].values, self.df[inputs[3]].values
+        res = talib.CDLTASUKIGAP(open_, high, low, close, **kwargs)
         return pd.Series(res, index=self.df.index, name='CDLTASUKIGAP')
 
-    def cdlthrusting(self) -> pd.Series:
+    def cdlthrusting(self, inputs, **kwargs) -> pd.Series:
         """
         Thrusting Pattern
 
         Returns:
             pd.Series: The calculated indicator(s).
         """
-        open_, high, low, close = self.df['open'].values, self.df['high'].values, self.df['low'].values, self.df['close'].values
-        res = talib.CDLTHRUSTING(open_, high, low, close)
+        open_, high, low, close = self.df[inputs[0]].values, self.df[inputs[1]].values, self.df[inputs[2]].values, self.df[inputs[3]].values
+        res = talib.CDLTHRUSTING(open_, high, low, close, **kwargs)
         return pd.Series(res, index=self.df.index, name='CDLTHRUSTING')
 
-    def cdltristar(self) -> pd.Series:
+    def cdltristar(self, inputs, **kwargs) -> pd.Series:
         """
         Tristar Pattern
 
         Returns:
             pd.Series: The calculated indicator(s).
         """
-        open_, high, low, close = self.df['open'].values, self.df['high'].values, self.df['low'].values, self.df['close'].values
-        res = talib.CDLTRISTAR(open_, high, low, close)
+        open_, high, low, close = self.df[inputs[0]].values, self.df[inputs[1]].values, self.df[inputs[2]].values, self.df[inputs[3]].values
+        res = talib.CDLTRISTAR(open_, high, low, close, **kwargs)
         return pd.Series(res, index=self.df.index, name='CDLTRISTAR')
 
-    def cdlunique3river(self) -> pd.Series:
+    def cdlunique3river(self, inputs, **kwargs) -> pd.Series:
         """
         Unique 3 River
 
         Returns:
             pd.Series: The calculated indicator(s).
         """
-        open_, high, low, close = self.df['open'].values, self.df['high'].values, self.df['low'].values, self.df['close'].values
-        res = talib.CDLUNIQUE3RIVER(open_, high, low, close)
+        open_, high, low, close = self.df[inputs[0]].values, self.df[inputs[1]].values, self.df[inputs[2]].values, self.df[inputs[3]].values
+        res = talib.CDLUNIQUE3RIVER(open_, high, low, close, **kwargs)
         return pd.Series(res, index=self.df.index, name='CDLUNIQUE3RIVER')
 
-    def cdlupsidegap2crows(self) -> pd.Series:
+    def cdlupsidegap2crows(self, inputs, **kwargs) -> pd.Series:
         """
         Upside Gap Two Crows
 
         Returns:
             pd.Series: The calculated indicator(s).
         """
-        open_, high, low, close = self.df['open'].values, self.df['high'].values, self.df['low'].values, self.df['close'].values
-        res = talib.CDLUPSIDEGAP2CROWS(open_, high, low, close)
+        open_, high, low, close = self.df[inputs[0]].values, self.df[inputs[1]].values, self.df[inputs[2]].values, self.df[inputs[3]].values
+        res = talib.CDLUPSIDEGAP2CROWS(open_, high, low, close, **kwargs)
         return pd.Series(res, index=self.df.index, name='CDLUPSIDEGAP2CROWS')
 
-    def cdlxsidegap3methods(self) -> pd.Series:
+    def cdlxsidegap3methods(self, inputs, **kwargs) -> pd.Series:
         """
         Upside/Downside Gap Three Methods
 
         Returns:
             pd.Series: The calculated indicator(s).
         """
-        open_, high, low, close = self.df['open'].values, self.df['high'].values, self.df['low'].values, self.df['close'].values
-        res = talib.CDLXSIDEGAP3METHODS(open_, high, low, close)
+        open_, high, low, close = self.df[inputs[0]].values, self.df[inputs[1]].values, self.df[inputs[2]].values, self.df[inputs[3]].values
+        res = talib.CDLXSIDEGAP3METHODS(open_, high, low, close, **kwargs)
         return pd.Series(res, index=self.df.index, name='CDLXSIDEGAP3METHODS')
 
-    def get_indicators_df(self, *indicators, **kwargs) -> pd.DataFrame:
+    def get_indicators_df(self, indicator_list: list[str]) -> pd.DataFrame:
         """
-        Computes multiple indicators and combines them with the original OHLCV data.
-        Drops initial NaN rows (warm-up period of indicators) and shifts the
-        dataframe by 1 to avoid lookahead bias.
+        Computes multiple indicators defined in config and combines them with original OHLCV data.
+        Drops initial NaN rows (warm-up period of indicators) and shifts only the
+        indicator columns by 1 to avoid lookahead bias, while keeping OHLCV aligned
+        with their true timestamp.
         """
-        import inspect
         df_combined = self.df.copy()
+        indicator_cols = []
         
-        for name in indicators:
-            if not hasattr(self, name):
+        for ind_name in indicator_list:
+            if ind_name not in self.config:
+                print(f"Warning: Indicator {ind_name} not found in config.")
                 continue
-            
-            method = getattr(self, name)
-            sig = inspect.signature(method)
-            valid_kwargs = {k: v for k, v in kwargs.items() if k in sig.parameters}
-            
-            result = method(**valid_kwargs)
-            
-            if isinstance(result, tuple):
-                for series in result:
-                    col_name = f"{series.name}"
-                    df_combined[col_name] = series
-            elif isinstance(result, pd.Series):
-                col_name = f"{result.name}"
-                df_combined[col_name] = result
+                
+            configs = self.config[ind_name]
+            for cfg in configs:
+                inputs = cfg.get('inputs', [])
+                parameters = cfg.get('parameters', {})
+                aliases = cfg.get('aliases', {})
+                
+                if not aliases:
+                    continue
+                    
+                method_name = ind_name.lower()
+                    
+                if hasattr(self, method_name):
+                    method = getattr(self, method_name)
+                    result = method(inputs=inputs, **parameters)
+                    
+                    if isinstance(result, tuple):
+                        alias_values = list(aliases.values())
+                        for i, series in enumerate(result):
+                            col_name = alias_values[i] if i < len(alias_values) else series.name
+                            df_combined[col_name] = series
+                            indicator_cols.append(col_name)
+                    elif isinstance(result, pd.Series):
+                        alias_values = list(aliases.values())
+                        col_name = alias_values[0] if alias_values else result.name
+                        df_combined[col_name] = result
+                        indicator_cols.append(col_name)
         
-        # Drop rows with NaN values (indicator warm-up period)
+        # Shift only the indicator columns to avoid lookahead bias
+        if indicator_cols:
+            df_combined[indicator_cols] = df_combined[indicator_cols].shift(1)
+        
+        # Drop rows with NaN values (indicator warm-up period + the shift-induced NaN row)
         df_combined = df_combined.dropna()
         
-        # Shift by 1 to avoid lookahead bias
-        df_combined = df_combined.shift(1).dropna()
-        
         return df_combined
-

@@ -1,0 +1,54 @@
+EMA:
+  - inputs:
+      - close
+    parameters:
+      timeperiod: 20
+    aliases:
+      ema: ind_EMA_20
+
+  - inputs:
+      - close
+    parameters:
+      timeperiod: 50
+    aliases:
+      ema: ind_EMA_50
+
+RSI:
+  - inputs:
+      - close
+    parameters:
+      timeperiod: 14
+    aliases:
+      rsi: ind_RSI_14
+
+MACD:
+  - inputs:
+      - close
+    parameters:
+      fastperiod: 12
+      slowperiod: 26
+      signalperiod: 9
+    aliases:
+      macd: ind_MACD_12_26_9
+      macd_signal: ind_MACD_SIGNAL_12_26_9
+      macd_hist: ind_MACD_HIST_12_26_9
+
+CDLDOJI:
+  - inputs:
+      - open
+      - high
+      - low
+      - close
+    parameters: {}
+    aliases:
+      cdldoji: pat_DOJI
+
+CDLENGULFING:
+  - inputs:
+      - open
+      - high
+      - low
+      - close
+    parameters: {}
+    aliases:
+      cdlengulfing: pat_BULLISH_ENGULFING

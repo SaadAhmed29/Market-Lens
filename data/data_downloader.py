@@ -342,4 +342,9 @@ class DataFetcher:
             final_df = final_df[(final_df.index >= start_dt) & (final_df.index <= end_dt)]
             final_df = final_df.round(4)
             
+        # Skip resampling entirely if the requested time_frame is already 1-minute
+        is_1m = time_frame in ("1m", "1min", "1T")
+        if is_1m:
+            return final_df, (final_df if resample_1m else None)
+            
         return DataFetcher.get_resampled_df(final_df, time_frame, resample_1m)

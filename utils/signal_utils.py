@@ -2,7 +2,7 @@ import pandas as pd
 import numpy as np
 
 
-# Helpers
+# Conditions Helpers
 
 def _resolve_operand(df: pd.DataFrame, operand) -> pd.Series | float | int:
     """
@@ -130,3 +130,78 @@ OHLC_OPERATOR_MAP = {
     "low_above":   _op_low_above,
     "low_below":   _op_low_below,
 }
+
+
+# Rule implementations
+
+def _rule_and(condition_df: pd.DataFrame, cols: list[str]) -> pd.Series:
+    """All conditions must be True."""
+    return condition_df[cols].all(axis=1)
+
+
+def _rule_or(condition_df: pd.DataFrame, cols: list[str]) -> pd.Series:
+    """At least one condition must be True."""
+    return condition_df[cols].any(axis=1)
+
+
+def _rule_majority(condition_df: pd.DataFrame, cols: list[str]) -> pd.Series:
+    """More than half of the conditions must be True."""
+    total = len(cols)
+    return condition_df[cols].sum(axis=1) > (total / 2)
+
+
+def _rule_weighted(condition_df: pd.DataFrame, cols: list[str], weights: list[float]) -> pd.Series:
+    """
+    Weighted sum of conditions must exceed the total possible weight / 2.
+    Weights are defined per condition in config under 'weight' key.
+    Falls back to equal weights if not provided.
+    """
+    if not weights or len(weights) != len(cols):
+        weights = [1.0] * len(cols)
+
+    weight_series = [
+        condition_df[col].astype(float) * w
+        for col, w in zip(cols, weights)
+    ]
+    weighted_sum = pd.concat(weight_series, axis=1).sum(axis=1)
+    threshold = sum(weights) / 2
+    return weighted_sum > threshold
+
+
+RULE_MAP = {
+    "AND":      _rule_and,
+    "OR":       _rule_or,
+    "MAJORITY": _rule_majority,
+    "WEIGHTED": _rule_weighted,
+}
+
+
+# Helper: apply rule to one side (long or short)
+
+def _apply_rule(condition_df: pd.DataFrame, side_cfg: dict, side: str) -> pd.Series:
+    """
+    Applies the configured rule to the condition columns for one side (long/short).
+    Returns a Boolean Series.
+    """
+    rule = side_cfg.get('rule', 'AND').upper()
+    conditions = side_cfg.get('conditions', [])
+
+    cols = [f"{side}_cond_{i}" for i in range(1, len(conditions) + 1)]
+
+    # Filter to only cols that actually exist (some may have been skipped with warning)
+    cols = [c for c in cols if c in condition_df.columns]
+
+    if not cols:
+        return pd.Series(False, index=condition_df.index)
+
+    if rule not in RULE_MAP:
+        raise ValueError(
+            f"Unsupported rule '{rule}' for side '{side}'. "
+            f"Supported rules: {list(RULE_MAP.keys())}"
+        )
+
+    if rule == "WEIGHTED":
+        weights = [float(c.get('weight', 1.0)) for c in conditions]
+        return _rule_weighted(condition_df, cols, weights)
+
+    return RULE_MAP[rule](condition_df, cols)

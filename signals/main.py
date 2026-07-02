@@ -35,29 +35,19 @@ def calculate_indicators(exchange: str, symbol: str, start, end, time_frame: str
 # generate main signals
 
 def main():
-    
-    exchange="binance",
-    symbol="ADA",
-    start=pd.to_datetime("2026-06-28", utc=True),
-    end=pd.to_datetime("2026-06-29", utc=True),
-    time_frame="1m",
-    config_path="indicators/config.yaml"
-    selected_indicators=[
-        "EMA",
-        "RSI",
-        "MACD",
-        "CDLDOJI",
-        "CDLENGULFING"
-    ]
 
     # calculate indicators
 
+    selected_indicators = [
+        "SMA"
+    ]
+
     df = calculate_indicators(
         exchange="binance",
-        symbol="ADA",
-        start=pd.to_datetime("2026-06-28", utc=True),
-        end=pd.to_datetime("2026-06-29", utc=True),
-        time_frame="1m",
+        symbol="BTC",
+        start=pd.to_datetime("2025-01-01", utc=True),
+        end=pd.to_datetime("2026-07-01", utc=True),
+        time_frame="1h",
         config_path="indicators/config.yaml",  
         selected_indicators=selected_indicators
     )
@@ -67,10 +57,14 @@ def main():
     signal = generate_signals(
         df=df,
         config_path="signals/config.yaml",
-        strategy_name="sample_strategy"
+        strategy_name="my_strategy"
     )
 
-    print(signal)
+    df = df.join(signal)
+  
+    # Save df in a csv file
+    df.to_csv("sma_signal.csv", index=True)
+    print("Saved DataFrame to btc_sma.csv")
     
 
 main()

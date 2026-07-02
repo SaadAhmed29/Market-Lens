@@ -2150,6 +2150,6 @@ class TalibIndicators:
             df_combined[indicator_cols] = df_combined[indicator_cols].shift(1)
         
         # Drop rows with NaN values (indicator warm-up period + the shift-induced NaN row)
-        df_combined = df_combined.dropna()
+        #df_combined = df_combined.dropna()
         
         return df_combined

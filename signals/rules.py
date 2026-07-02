@@ -46,4 +46,6 @@ def generate_signals(df: pd.DataFrame, config_path: str, strategy_name: str) -> 
     signal[short_signal] = -1
     signal[long_signal]  = 1
 
-    return signal
+    condition_df = condition_df.join(signal)
+    
+    return condition_df

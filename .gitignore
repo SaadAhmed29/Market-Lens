@@ -26,3 +26,6 @@ logs/
 
 # Testing
 testing/
+
+# CSV files
+*.csv

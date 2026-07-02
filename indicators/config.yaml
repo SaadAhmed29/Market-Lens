@@ -13,6 +13,14 @@ EMA:
     aliases:
       ema: ind_EMA_50
 
+SMA:
+  - inputs:
+      - close
+    parameters:
+      timeperiod: 10
+    aliases:
+      sma: ind_SMA_10
+
 RSI:
   - inputs:
       - close

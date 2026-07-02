@@ -95,4 +95,6 @@ def evaluate_all_conditions(df: pd.DataFrame, config_path: str, strategy_name: s
                 print(f"[conditions] Warning: skipping {col_name} — {e}")
                 result_cols[col_name] = pd.Series(False, index=df.index)
 
-    return pd.DataFrame(result_cols, index=df.index)
+    df = pd.DataFrame(result_cols, index=df.index).shift(1)
+    df = df.fillna(False)
+    return df

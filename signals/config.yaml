@@ -34,3 +34,22 @@ sample_strategy:
         operator: cross_below
         right: ind_MACD_SIGNAL_12_26_9
         persist_bars: 5
+
+
+my_strategy:
+  long:
+    rule: AND
+    conditions:
+      - left: close
+        operator: cross_above
+        right: ind_SMA_10
+        persist_bars: 2
+
+  short:
+    rule: AND
+    conditions:
+      - left: close
+        operator: cross_below
+        right: ind_SMA_10
+        persist_bars: 2
+

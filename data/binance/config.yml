@@ -16,10 +16,10 @@ symbols:
 
 
 # Time horizon (resolution) for the data
-time_horizon: "1m"
+time_horizon: "1h"
 
 # Date range for the data
-start_date: "2026-06-26"
+start_date: "2025-01-01"
 end_date: "now"  # Resolved dynamically at runtime to current date
 
 # Data processing

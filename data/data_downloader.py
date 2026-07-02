@@ -269,7 +269,7 @@ class DataFetcher:
         Does not update the database.
         """
         start_dt = pd.to_datetime(start, utc=True)
-        end_dt = pd.to_datetime(end, utc=True)
+        end_dt = pd.to_datetime(end, utc=True) + pd.Timedelta(days=1)
         
         engine = get_engine()
         tbl_name = table_name(exchange, symbol)

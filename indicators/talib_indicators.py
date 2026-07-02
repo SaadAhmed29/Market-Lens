@@ -1,11 +1,10 @@
 import numpy as np
 import pandas as pd
 import talib
-import yaml
 from data.data_downloader import DataFetcher
 
 class TalibIndicators:
-    def __init__(self, exchange: str, symbol: str, start, end, time_frame: str, config_path: str):
+    def __init__(self, exchange: str, symbol: str, start, end, time_frame: str, config: dict):
         """
         Initializes the TalibIndicators class by fetching OHLCV data.
         """
@@ -17,8 +16,7 @@ class TalibIndicators:
             time_frame=time_frame,
             resample_1m=False
         )
-        with open(config_path, "r") as f:
-            self.config = yaml.safe_load(f)
+        self.config = config
 
     # OVERLAP STUDIES INDICATORS
 

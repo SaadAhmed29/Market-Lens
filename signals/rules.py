@@ -1,4 +1,3 @@
-import yaml
 import numpy as np
 import pandas as pd
 from signals.conditions import evaluate_all_conditions
@@ -6,7 +5,7 @@ from utils.signal_utils import _apply_rule
 
 # Public API
 
-def generate_signals(df: pd.DataFrame, config_path: str, strategy_name: str) -> pd.Series:
+def generate_signals(df: pd.DataFrame, config: dict, strategy_name: str) -> pd.Series:
     """
     Full pipeline: evaluates conditions then applies the configured rule
     to produce a final signal series.
@@ -14,8 +13,8 @@ def generate_signals(df: pd.DataFrame, config_path: str, strategy_name: str) -> 
     Parameters
     ----------
     df            : merged OHLCV + indicator DataFrame from main.py
-    config_path   : path to config.yaml
-    strategy_name : name of the strategy to run (must exist in config.yaml)
+    config        : loaded config dict (from config.yaml)
+    strategy_name : name of the strategy to run (must exist in config)
 
     Returns
     -------
@@ -24,9 +23,6 @@ def generate_signals(df: pd.DataFrame, config_path: str, strategy_name: str) -> 
         -1  → Sell
          0  → No Signal
     """
-    with open(config_path, "r") as f:
-        config = yaml.safe_load(f)
-
     strategy = config.get(strategy_name)
     if strategy is None:
         raise KeyError(
@@ -35,7 +31,7 @@ def generate_signals(df: pd.DataFrame, config_path: str, strategy_name: str) -> 
         )
 
     # evaluate all conditions
-    condition_df = evaluate_all_conditions(df, config_path, strategy_name)
+    condition_df = evaluate_all_conditions(df, config, strategy_name)
 
     # apply rule per side
     long_signal  = _apply_rule(condition_df, strategy.get('long',  {}), side='long')

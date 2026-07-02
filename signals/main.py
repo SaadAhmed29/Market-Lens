@@ -6,9 +6,10 @@ from datetime import datetime, timedelta
 from indicators.talib_indicators import TalibIndicators
 from data.data_downloader import DataFetcher
 from signals.rules import generate_signals
+from utils.config import load_config
 
 
-def calculate_indicators(exchange: str, symbol: str, start, end, time_frame: str, config_path: str, selected_indicators: list[str]) -> pd.DataFrame:
+def calculate_indicators(exchange: str, symbol: str, start, end, time_frame: str, config: dict, selected_indicators: list[str]) -> pd.DataFrame:
     
     print("Fetching data and initializing indicators...")
     try:
@@ -18,7 +19,7 @@ def calculate_indicators(exchange: str, symbol: str, start, end, time_frame: str
             start=start,
             end=end,
             time_frame=time_frame,
-            config_path=config_path
+            config=config
         )
     except Exception as e:
         print(f"Error fetching data: {e}")
@@ -42,21 +43,25 @@ def main():
         "SMA"
     ]
 
+    indicator_config = load_config("indicators/config.yaml")
+
     df = calculate_indicators(
         exchange="binance",
         symbol="BTC",
         start=pd.to_datetime("2025-01-01", utc=True),
         end=pd.to_datetime("2026-07-01", utc=True),
         time_frame="1h",
-        config_path="indicators/config.yaml",  
+        config=indicator_config,  
         selected_indicators=selected_indicators
     )
 
     # generate signals
 
+    signal_config = load_config("signals/config.yaml")
+
     signal = generate_signals(
         df=df,
-        config_path="signals/config.yaml",
+        config=signal_config,
         strategy_name="my_strategy"
     )
 

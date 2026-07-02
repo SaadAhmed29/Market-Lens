@@ -1,5 +1,4 @@
 import pandas as pd
-import yaml
 
 from utils.signal_utils import (
     _apply_persist,
@@ -56,24 +55,21 @@ def evaluate_condition(df: pd.DataFrame, condition: dict) -> pd.Series:
 
 # Public API: evaluate all long/short conditions from strategy config
 
-def evaluate_all_conditions(df: pd.DataFrame, config_path: str, strategy_name: str) -> pd.DataFrame:
+def evaluate_all_conditions(df: pd.DataFrame, config: dict, strategy_name: str) -> pd.DataFrame:
     """
-    Evaluates all conditions for a given strategy from config.yaml
+    Evaluates all conditions for a given strategy from config
     and returns a single DataFrame of Boolean columns.
 
     Parameters
     ----------
     df            : merged OHLCV + indicator DataFrame from main.py
-    config_path   : path to config.yaml
+    config        : loaded config dict (from config.yaml)
     strategy_name : name of the strategy to evaluate (e.g. 'my_strategy')
 
     Returns
     -------
     pd.DataFrame with index matching df and one Boolean column per condition.
     """
-    with open(config_path, "r") as f:
-        config = yaml.safe_load(f)
-
     strategy = config.get(strategy_name)
     if strategy is None:
         raise KeyError(

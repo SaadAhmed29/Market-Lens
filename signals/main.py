@@ -40,7 +40,7 @@ def main():
     # calculate indicators
 
     selected_indicators = [
-        "SMA"
+        "CDLDOJI"
     ]
 
     indicator_config = load_config("indicators/config.yaml")
@@ -62,14 +62,14 @@ def main():
     signal = generate_signals(
         df=df,
         config=signal_config,
-        strategy_name="my_strategy"
+        strategy_name="doji_strategy"
     )
 
     df = df.join(signal)
   
     # Save df in a csv file
-    df.to_csv("sma_signal.csv", index=True)
-    print("Saved DataFrame to btc_sma.csv")
+    df.to_csv("doji_signal.csv", index=True)
+    print("Saved DataFrame to doji_signal.csv")
     
 
 main()

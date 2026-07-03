@@ -251,7 +251,7 @@ class DataFetcher:
             
         logger.info(f"[{self.exchange}] {symbol}: total inserted {total_inserted} rows.")
 
-    def download_all(self, symbols: list[str], create_new_tables: bool = True) -> None:
+    def download_all(self, symbols: list[str], create_new_tables: bool = False) -> None:
         """Download data for every symbol in the list."""
         logger.info(f"Starting {self.exchange.capitalize()} download plan for {len(symbols)} symbols.")
         for symbol in symbols:

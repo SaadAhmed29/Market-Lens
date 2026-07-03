@@ -1,0 +1,32 @@
+start_date: "2026-05-01"
+end_date: "2026-06-30"
+
+initial_balance: 10000
+
+position_size:
+  type: fixed_percentage      # fixed_percentage
+  value: 10                   # 10% of current balance
+
+commission: 0.0005            # 0.05% per trade
+slippage: 0.0002              # 0.02% execution slippage
+
+allow_long: true
+allow_short: true
+
+take_profit:
+  enabled: true
+  type: percentage            # percentage
+  value: 2.0                  # 2%
+
+stop_loss:
+  enabled: true
+  type: percentage            # percentage
+  value: 1.0                  # 1%
+
+entry_price:
+  method: next_open           # next_open
+
+exit_price:
+  method: next_open           # next_open
+
+max_open_positions: 1

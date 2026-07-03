@@ -35,7 +35,7 @@ def calculate_indicators(exchange: str, symbol: str, start, end, time_frame: str
 
 # generate main signals
 
-def main():
+def get_signal_df(save_csv: bool = False, exchange: str = "binance", symbol: str = "BTC", start: str = "2025-01-01", end: str = "2025-01-31"):
 
     # calculate indicators
 
@@ -46,10 +46,10 @@ def main():
     indicator_config = load_config("indicators/config.yaml")
 
     df = calculate_indicators(
-        exchange="binance",
-        symbol="BTC",
-        start=pd.to_datetime("2025-01-01", utc=True),
-        end=pd.to_datetime("2026-07-01", utc=True),
+        exchange=exchange,
+        symbol=symbol,
+        start=start,
+        end=end,
         time_frame="1h",
         config=indicator_config,  
         selected_indicators=selected_indicators
@@ -65,11 +65,13 @@ def main():
         strategy_name="doji_strategy"
     )
 
-    df = df.join(signal)
-  
-    # Save df in a csv file
-    df.to_csv("doji_signal.csv", index=True)
-    print("Saved DataFrame to doji_signal.csv")
+    if save_csv:
+        df = df.join(signal)
+        df.to_csv("doji_signal.csv", index=True)
+        print("Saved DataFrame to doji_signal.csv")
     
+    signal = signal.drop(columns=["long_cond_1", "long_cond_2", "short_cond_1", "short_cond_2"])
+    print(signal)
+    return signal
 
-main()
+get_signal_df()

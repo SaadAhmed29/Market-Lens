@@ -46,6 +46,29 @@ def table_name(exchange: str, symbol: str) -> str:
     return f"{exchange}_data.{symbol.lower()}_1m"
 
 
+def get_table_name(symbol: str, timehorizon: str) -> str:
+    """Return the formatted table name without schema, e.g. ``ada_1h``."""
+    return f"{symbol.lower()}_{timehorizon}"
+
+
+def create_table_if_not_exists(schema: str, table_name: str, engine) -> None:
+    """Create an OHLCV table under the given schema if it doesn't already exist."""
+    metadata = MetaData()
+    table = Table(
+        table_name,
+        metadata,
+        Column("date_time", TIMESTAMP(timezone=True), primary_key=True),
+        Column("open", Float),
+        Column("high", Float),
+        Column("low", Float),
+        Column("close", Float),
+        Column("volume", Float),
+        schema=schema,
+        extend_existing=True,
+    )
+    metadata.create_all(engine, tables=[table])
+
+
 def get_latest_datetime(engine, tbl_name: str) -> datetime | None:
     """Return the most recent ``date_time`` stored in *tbl_name*, or None."""
     query = text(f"SELECT MAX(date_time) FROM {tbl_name}")

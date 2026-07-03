@@ -16,7 +16,7 @@ symbols:
 
 
 # Time horizon (resolution) for the data
-time_horizon: "1h"
+time_horizon: "1m"
 
 # Date range for the data
 start_date: "2025-01-01"

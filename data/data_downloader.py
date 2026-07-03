@@ -125,7 +125,7 @@ class DataFetcher:
 
     # Public API
 
-    def download(self, symbol: str) -> None:
+    def download(self, symbol: str, create_new_tables: bool = False) -> None:
         """Download OHLCV data for a single symbol with incremental updates.
 
         1. Query the DB for both the earliest and latest stored ``date_time``.
@@ -137,13 +137,44 @@ class DataFetcher:
         5. Fill missing rows according to ``fill_missing_data`` config.
         6. Insert into the correct table.
         """
-        tbl_name = table_name(self.exchange, symbol)
+        from utils.db import get_table_name, create_table_if_not_exists
+        
+        bare_tbl = get_table_name(symbol, self.time_horizon)
+        schema = f"{self.exchange}_data"
+        tbl_name = f"{schema}.{bare_tbl}"
+        
+        if create_new_tables:
+            create_table_if_not_exists(schema, bare_tbl, self.engine)
         configured_start = pd.to_datetime(self.start_date, utc=True).to_pydatetime()
         end_dt = pd.to_datetime(self.end_date, utc=True).to_pydatetime()
 
         # Query both boundaries of existing DB data
         latest_dt = get_latest_datetime(self.engine, tbl_name)
         earliest_dt = get_earliest_datetime(self.engine, tbl_name)
+
+        # If data exists, check whether the existing time horizon is larger
+        # than the requested one.  We cannot resample from a higher timeframe
+        # to a lower one, so the table must be replaced entirely.
+        if latest_dt is not None:
+            requested_delta = INTERVAL_DELTAS.get(self.time_horizon)
+            if requested_delta is not None:
+                sample_query = text(
+                    f"SELECT date_time FROM {tbl_name} ORDER BY date_time ASC LIMIT 2"
+                )
+                with self.engine.connect() as conn:
+                    rows = conn.execute(sample_query).fetchall()
+                if len(rows) == 2:
+                    existing_delta = rows[1][0] - rows[0][0]
+                    if existing_delta > requested_delta:
+                        logger.info(
+                            f"[{self.exchange}] {symbol}: existing data interval "
+                            f"({existing_delta}) is larger than requested "
+                            f"({requested_delta}).  Replacing table data."
+                        )
+                        with self.engine.begin() as conn:
+                            conn.execute(text(f"DELETE FROM {tbl_name}"))
+                        latest_dt = None
+                        earliest_dt = None
 
         # Build a list of (start, end) ranges that need fetching
         fetch_ranges = []
@@ -220,12 +251,12 @@ class DataFetcher:
             
         logger.info(f"[{self.exchange}] {symbol}: total inserted {total_inserted} rows.")
 
-    def download_all(self, symbols: list[str]) -> None:
+    def download_all(self, symbols: list[str], create_new_tables: bool = True) -> None:
         """Download data for every symbol in the list."""
         logger.info(f"Starting {self.exchange.capitalize()} download plan for {len(symbols)} symbols.")
         for symbol in symbols:
             try:
-                self.download(symbol)
+                self.download(symbol, create_new_tables=create_new_tables)
                 logger.info(f"Successfully finished processing {symbol} on {self.exchange.capitalize()}.")
             except Exception as exc:
                 logger.error(f"Failed to process {symbol} on {self.exchange.capitalize()}: {exc}")
@@ -272,7 +303,9 @@ class DataFetcher:
         end_dt = pd.to_datetime(end, utc=True) + pd.Timedelta(days=1)
         
         engine = get_engine()
-        tbl_name = table_name(exchange, symbol)
+        from utils.db import get_table_name
+        bare_tbl = get_table_name(symbol, time_frame)
+        tbl_name = f"{exchange}_data.{bare_tbl}"
         
         query = text(f"""
             SELECT * FROM {tbl_name} 

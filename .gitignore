@@ -29,3 +29,6 @@ testing/
 
 # CSV files
 *.csv
+
+# HTML files
+*.html

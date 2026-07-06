@@ -3,6 +3,8 @@ end_date: "2026-06-30"
 
 initial_balance: 10000
 
+exit_on_opposite_signal: true   # or false for TP/SL-only behavior
+
 position_size:
   type: fixed_percentage      # fixed_percentage
   value: 10                   # 10% of current balance

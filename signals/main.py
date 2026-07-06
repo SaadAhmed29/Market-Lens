@@ -35,12 +35,12 @@ def calculate_indicators(exchange: str, symbol: str, start, end, time_frame: str
 
 # generate main signals
 
-def get_signal_df(save_csv: bool = False, exchange: str = "binance", symbol: str = "BTC", start: str = "2025-01-01", end: str = "2025-01-31"):
+def get_signal_df(save_csv: bool = False, exchange: str = "binance", symbol: str = "BTC", start: str = "2026-04-01", end: str = "2026-06-01"):
 
     # calculate indicators
 
     selected_indicators = [
-        "CDLDOJI"
+        "RSI"
     ]
 
     indicator_config = load_config("indicators/config.yaml")
@@ -62,16 +62,17 @@ def get_signal_df(save_csv: bool = False, exchange: str = "binance", symbol: str
     signal = generate_signals(
         df=df,
         config=signal_config,
-        strategy_name="doji_strategy"
+        strategy_name="rsi_strategy"
     )
 
     if save_csv:
         df = df.join(signal)
-        df.to_csv("doji_signal.csv", index=True)
-        print("Saved DataFrame to doji_signal.csv")
-    
-    signal = signal.drop(columns=["long_cond_1", "long_cond_2", "short_cond_1", "short_cond_2"])
+        df.to_csv("rsi_signal.csv", index=True)
+        print("Saved DataFrame to rsi_signal.csv")
+        return df
+
+    signal = signal[["signal"]]
     print(signal)
     return signal
 
-get_signal_df()
+get_signal_df(save_csv=True)

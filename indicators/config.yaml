@@ -21,6 +21,13 @@ SMA:
     aliases:
       sma: ind_SMA_10
 
+  - inputs:
+      - close
+    parameters:
+      timeperiod: 20
+    aliases:
+      sma: ind_SMA_20
+
 RSI:
   - inputs:
       - close

@@ -112,3 +112,21 @@ doji_strategy:
       - left: close
         operator: "<"
         right: open
+
+
+sma_strategy:
+  long:
+    rule: AND
+    conditions:
+      - left: ind_SMA_20
+        operator: cross_above
+        right: close
+        persist_bars: 0
+
+  short:
+    rule: AND
+    conditions:
+      - left: ind_SMA_20
+        operator: cross_below
+        right: close
+        persist_bars: 0

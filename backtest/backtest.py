@@ -207,6 +207,30 @@ class BacktestEngine:
             idx = row.entry_idx
             sig = row.signal
 
+            # -- If a position is open, check whether TP/SL already closed
+            #    it before this signal's candle.  This is essential when
+            #    exit_on_opposite_signal is False, because in that mode
+            #    the loop would otherwise just `continue` past every signal
+            #    and only resolve TP/SL after all signals are exhausted
+            #    (i.e. only the very last trade would ever be recorded).
+            if position is not None:
+                hit = self._scan_for_tp_sl(
+                    position['signal'], position['tp_price'], position['sl_price'],
+                    position['entry_idx'], idx - 1, highs, lows
+                )
+                if hit is not None:
+                    # TP/SL was hit before this signal's candle
+                    trades.append({
+                        **position,
+                        'exit_idx': hit['idx'],
+                        'exit_price': hit['price'],
+                        'exit_reason': hit['reason'],
+                        'forced_exit': False,
+                    })
+                    position = None
+                    # Fall through: this signal may now open a new trade
+                    # (handled by the `position is None` block below).
+
             if position is None:
                 if sig == 1 and allow_long:
                     position = open_trade(1, idx)
@@ -709,7 +733,6 @@ class BacktestEngine:
 
         return output_path
 
-    # ------------------------------------------------------------------
     # Entry point
     def run(self, html_report_path='backtest_report.html'):
         self.prepare()

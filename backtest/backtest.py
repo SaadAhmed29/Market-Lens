@@ -51,7 +51,9 @@ class BacktestEngine:
                 exchange=self.config.get('exchange', 'binance'),
                 symbol=self.config.get('symbol', 'BTC'),
                 start=self.config.get('start_date'),
-                end=self.config.get('end_date')
+                end=self.config.get('end_date'),
+                strategy_name='rsi_strategy',
+                selected_indicators=['RSI']
             )
         except TypeError:
             self.signal_df = get_signal_df()

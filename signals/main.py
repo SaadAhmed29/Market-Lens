@@ -9,7 +9,8 @@ from signals.rules import generate_signals
 from utils.config import load_config
 
 
-def calculate_indicators(exchange: str, symbol: str, start, end, time_frame: str, config: dict, selected_indicators: list[str]) -> pd.DataFrame:
+def calculate_indicators(exchange: str, symbol: str, start, end, time_frame: str,
+                        config: dict, selected_indicators: list[str]) -> pd.DataFrame:
     
     print("Fetching data and initializing indicators...")
     try:
@@ -33,16 +34,12 @@ def calculate_indicators(exchange: str, symbol: str, start, end, time_frame: str
     return final_df
 
 
-# generate main signals
+# Generate main signals
+def get_signal_df(save_csv: bool = False, exchange: str = "binance", symbol: str = "BTC",
+                    start: str = "2026-04-01", end: str = "2026-06-01", strategy_name: str = "",
+                    selected_indicators: list[str] = []):
 
-def get_signal_df(save_csv: bool = False, exchange: str = "binance", symbol: str = "BTC", start: str = "2026-04-01", end: str = "2026-06-01"):
-
-    # calculate indicators
-
-    selected_indicators = [
-        "RSI"
-    ]
-
+    # Calculate indicators
     indicator_config = load_config("indicators/config.yaml")
 
     df = calculate_indicators(
@@ -55,24 +52,23 @@ def get_signal_df(save_csv: bool = False, exchange: str = "binance", symbol: str
         selected_indicators=selected_indicators
     )
 
-    # generate signals
-
+    # Generate signals
     signal_config = load_config("signals/config.yaml")
 
     signal = generate_signals(
         df=df,
         config=signal_config,
-        strategy_name="rsi_strategy"
+        strategy_name=strategy_name
     )
 
     if save_csv:
         df = df.join(signal)
-        df.to_csv("rsi_signal.csv", index=True)
-        print("Saved DataFrame to rsi_signal.csv")
+        df.to_csv(f"{strategy_name}_signal.csv", index=True)
+        print(f"Saved DataFrame to {strategy_name}_signal.csv")
         return df
 
     signal = signal[["signal"]]
     print(signal)
     return signal
 
-get_signal_df(save_csv=True)
+get_signal_df(save_csv=False, strategy_name="rsi_strategy", selected_indicators=["RSI"])

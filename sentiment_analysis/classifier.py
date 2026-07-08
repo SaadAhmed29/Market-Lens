@@ -6,9 +6,9 @@ and writes the results (label and confidence_score) back to the same table.
 import json
 import logging
 import pandas as pd
-from sqlalchemy import text
 from transformers import pipeline
 from utils.db import get_engine
+from sentiment_analysis.db import load_unclassified_data, save_classification_results
 
 logging.basicConfig(
     level=logging.INFO,
@@ -19,25 +19,6 @@ log = logging.getLogger(__name__)
 SCHEMA = "sentiment_data"
 TABLE = "cleaned_data"
 BATCH_SIZE = 128
-
-
-def ensure_columns(engine):
-    """Add label and confidence_score columns to cleaned_data if they don't exist."""
-    with engine.begin() as conn:
-        conn.execute(text(f"""
-            ALTER TABLE {SCHEMA}.{TABLE}
-            ADD COLUMN IF NOT EXISTS label VARCHAR,
-            ADD COLUMN IF NOT EXISTS confidence_score FLOAT;
-        """))
-    log.info("Ensured label and confidence_score columns exist in %s.%s.", SCHEMA, TABLE)
-
-
-def load_data(engine) -> pd.DataFrame:
-    """Read all rows from cleaned_data."""
-    query = f"SELECT pk, title, body, comments FROM {SCHEMA}.{TABLE} ORDER BY pk"
-    df = pd.read_sql(query, engine)
-    log.info("Loaded %d rows from %s.%s", len(df), SCHEMA, TABLE)
-    return df
 
 
 def classify(df: pd.DataFrame) -> pd.DataFrame:
@@ -111,59 +92,20 @@ def classify(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-def save_results(engine, df: pd.DataFrame):
-    """Write label and confidence_score back to cleaned_data."""
+def run_classification(engine, start_date=None, end_date=None):
+    df = load_unclassified_data(engine, SCHEMA, TABLE, start_date, end_date)
     if df.empty:
+        log.info("No unclassified data in the given date range.")
         return
-
-    log.info("Saving %d results to database...", len(df))
-    
-    # We'll use a temporary table to do a bulk update to avoid updating row by row
-    temp_table = f"temp_{TABLE}_updates"
-    
-    # Only keep the columns we need to update
-    update_df = df[['pk', 'label', 'confidence_score']]
-    
-    with engine.begin() as conn:
-        # Create temporary table
-        update_df.to_sql(temp_table, conn, schema=SCHEMA, if_exists='replace', index=False)
         
-        # Perform bulk update
-        update_query = text(f"""
-            UPDATE {SCHEMA}.{TABLE} t
-            SET label = u.label,
-                confidence_score = u.confidence_score
-            FROM {SCHEMA}.{temp_table} u
-            WHERE t.pk = u.pk
-        """)
-        conn.execute(update_query)
-        
-        # Drop temporary table
-        conn.execute(text(f"DROP TABLE {SCHEMA}.{temp_table}"))
-        
-    log.info("Results saved successfully.")
+    df = classify(df)
+    save_classification_results(engine, df, SCHEMA, TABLE)
+    log.info("Classification step complete.")
 
 
 def main():
     engine = get_engine()
-    
-    # Add columns if they don't exist
-    ensure_columns(engine)
-    
-    # Load all rows
-    df = load_data(engine)
-    if df.empty:
-        log.info("No data to classify.")
-        return
-        
-    # Classify
-    df = classify(df)
-    
-    # Save back to database
-    save_results(engine, df)
-    
-    log.info("Classification pipeline complete.")
-
+    run_classification(engine)
 
 if __name__ == "__main__":
     main()

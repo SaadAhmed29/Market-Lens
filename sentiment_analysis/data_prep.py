@@ -12,6 +12,7 @@ import pandas as pd
 from bs4 import BeautifulSoup
 from utils.db import get_engine
 from langdetect import detect, LangDetectException
+from sentiment_analysis.db import load_raw_data, save_cleaned_data
 
 logging.basicConfig(
     level=logging.INFO,
@@ -97,14 +98,6 @@ def _clean_comments(comments_val):
 
 # Pipeline
 
-def load_raw(engine) -> pd.DataFrame:
-    """Read all rows from raw_data."""
-    query = f"SELECT * FROM {SCHEMA}.{RAW_TABLE}"
-    df = pd.read_sql(query, engine)
-    log.info("Loaded %d rows from %s.%s", len(df), SCHEMA, RAW_TABLE)
-    return df
-
-
 def clean(df: pd.DataFrame) -> pd.DataFrame:
     """Drop empty bodies, clean text columns, and deduplicate."""
     initial = len(df)
@@ -165,39 +158,21 @@ def clean(df: pd.DataFrame) -> pd.DataFrame:
     return df.reset_index(drop=True)
 
 
-def save_cleaned(engine, df: pd.DataFrame) -> None:
-    """Write cleaned rows into the cleaned_data table."""
-    # Drop the pk column so the DB generates new serial ids
-    cols = [c for c in df.columns if c != "pk"]
-    
-    # If comments was left as a list/dict, converting it to JSON string might be necessary for to_sql depending on DB adapter
-    if "comments" in df.columns:
-        df["comments"] = df["comments"].apply(lambda x: json.dumps(x) if isinstance(x, (list, dict)) else x)
-        
-    df[cols].to_sql(
-        CLEAN_TABLE,
-        engine,
-        schema=SCHEMA,
-        if_exists="append",
-        index=False,
-    )
-    log.info("Saved %d rows to %s.%s", len(df), SCHEMA, CLEAN_TABLE)
-
-
 # Entry point
 
-def main():
-    engine = get_engine()
-
-    df = load_raw(engine)
+def run_prep(engine, start_date=None, end_date=None):
+    df = load_raw_data(engine, SCHEMA, RAW_TABLE, start_date, end_date)
     if df.empty:
         log.info("No data in raw_data — nothing to clean.")
         return
 
     df = clean(df)
-    save_cleaned(engine, df)
+    save_cleaned_data(engine, df, SCHEMA, CLEAN_TABLE)
     log.info("Data prep complete.")
 
+def main():
+    engine = get_engine()
+    run_prep(engine)
 
 if __name__ == "__main__":
     main()

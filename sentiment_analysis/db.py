@@ -5,7 +5,15 @@ with two tables (raw_data, cleaned_data) sharing an identical column structure.
 
 import os
 import logging
+import json
+import pandas as pd
 import psycopg2
+from psycopg2.extras import execute_values, Json
+from sqlalchemy import text
+from utils.db import DB_CONFIG
+from sqlalchemy import text
+from sqlalchemy.dialects.postgresql import insert as pg_insert
+
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 log = logging.getLogger(__name__)
@@ -70,7 +78,6 @@ CREATE UNIQUE INDEX IF NOT EXISTS ux_{table}_source_id
 
 
 def get_connection():
-    from utils.db import DB_CONFIG
     database_url = os.environ.get("DATABASE_URL")
     if database_url:
         log.info("Connecting using DATABASE_URL")
@@ -119,6 +126,157 @@ def setup_schema():
     finally:
         conn.close()
 
+# Data Operations Helpers
+
+def get_existing_range(conn, schema, table, symbol=None):
+    """Return (min_date_time, max_date_time) already stored, optionally for a specific symbol."""
+    if symbol:
+        query = f"SELECT MIN(date_time), MAX(date_time) FROM {schema}.{table} WHERE symbol = %s"
+        with conn.cursor() as cur:
+            cur.execute(query, (symbol,))
+            return cur.fetchone()
+    else:
+        query = f"SELECT MIN(date_time), MAX(date_time) FROM {schema}.{table}"
+        with conn.cursor() as cur:
+            cur.execute(query)
+            return cur.fetchone()
+
+def get_missing_ranges(conn, schema, table, start, end, symbol=None):
+    """Compare the requested [start, end] window against what's already stored."""
+    existing_min, existing_max = get_existing_range(conn, schema, table, symbol)
+
+    if existing_min is None:
+        return [(start, end)]
+
+    missing = []
+    if start < existing_min:
+        missing.append((start, min(existing_min, end)))
+    if end > existing_max:
+        missing.append((max(existing_max, start), end))
+
+    if not missing:
+        msg = f"Symbol {symbol}: " if symbol else ""
+        log.info(
+            "%srequested range %s -> %s already covered by stored data (%s -> %s), skipping.",
+            msg, start.date() if hasattr(start, 'date') else start, end.date() if hasattr(end, 'date') else end, 
+            existing_min.date() if hasattr(existing_min, 'date') else existing_min, 
+            existing_max.date() if hasattr(existing_max, 'date') else existing_max
+        )
+    return missing
+
+def save_raw_items(conn, items: list, symbol: str, schema: str, table: str):
+    if not items:
+        return
+
+    rows = [
+        (
+            item["source_id"],
+            symbol,
+            item["subreddit"],
+            item["title"],
+            item["body"],
+            item["score"],
+            item["num_comments"],
+            item["date_time"],
+            Json(item["comments"]),
+        )
+        for item in items
+    ]
+
+    query = f"""
+        INSERT INTO {schema}.{table}
+        (source_id, symbol, subreddit, title, body, score, num_comments,
+         date_time, comments)
+        VALUES %s
+        ON CONFLICT (source_id) DO NOTHING
+    """
+    with conn.cursor() as cur:
+        execute_values(cur, query, rows)
+    conn.commit()
+
+def load_raw_data(engine, schema, table, start_date=None, end_date=None) -> pd.DataFrame:
+    """Read rows from raw_data, optionally filtered by date range."""
+    query = f"SELECT * FROM {schema}.{table}"
+    params = {}
+    
+    if start_date and end_date:
+        query += " WHERE date_time >= %(start)s AND date_time <= %(end)s"
+        params = {"start": start_date, "end": end_date}
+        
+    df = pd.read_sql(query, engine, params=params)
+    log.info("Loaded %d rows from %s.%s", len(df), schema, table)
+    return df
+
+def _upsert_on_conflict(table, conn, keys, data_iter):
+    """Custom to_sql insert method: ON CONFLICT (source_id) DO NOTHING."""
+    data = [dict(zip(keys, row)) for row in data_iter]
+    stmt = pg_insert(table.table).values(data)
+    stmt = stmt.on_conflict_do_nothing(index_elements=["source_id"])
+    conn.execute(stmt)
+
+def save_cleaned_data(engine, df: pd.DataFrame, schema: str, table: str) -> None:
+    """Write cleaned rows into the cleaned_data table."""
+    cols = [c for c in df.columns if c != "pk"]
+    
+    if "comments" in df.columns:
+        df["comments"] = df["comments"].apply(lambda x: json.dumps(x) if isinstance(x, (list, dict)) else x)
+        
+    df[cols].to_sql(
+        table,
+        engine,
+        schema=schema,
+        if_exists="append",
+        index=False,
+        method=_upsert_on_conflict,
+    )
+    log.info("Saved %d rows to %s.%s", len(df), schema, table)
+
+def load_unclassified_data(engine, schema, table, start_date=None, end_date=None) -> pd.DataFrame:
+    """Read rows from cleaned_data that lack a label, optionally within a date range."""
+    query = f"SELECT pk, title, body, comments FROM {schema}.{table} WHERE label IS NULL"
+    params = {}
+    if start_date and end_date:
+        query += " AND date_time >= %(start)s AND date_time <= %(end)s"
+        params = {"start": start_date, "end": end_date}
+        
+    query += " ORDER BY pk"
+    df = pd.read_sql(query, engine, params=params)
+    log.info("Loaded %d unclassified rows from %s.%s", len(df), schema, table)
+    return df
+
+def save_classification_results(engine, df: pd.DataFrame, schema: str, table: str):
+    """Write label and confidence_score back to cleaned_data."""
+    if df.empty:
+        return
+
+    log.info("Saving %d results to database...", len(df))
+    temp_table = f"temp_{table}_updates"
+    update_df = df[['pk', 'label', 'confidence_score']]
+    
+    with engine.begin() as conn:
+        update_df.to_sql(temp_table, conn, schema=schema, if_exists='replace', index=False)
+        update_query = text(f"""
+            UPDATE {schema}.{table} t
+            SET label = u.label,
+                confidence_score = u.confidence_score
+            FROM {schema}.{temp_table} u
+            WHERE t.pk = u.pk
+        """)
+        conn.execute(update_query)
+        conn.execute(text(f"DROP TABLE {schema}.{temp_table}"))
+        
+    log.info("Results saved successfully.")
+
+def check_unclassified_count(engine, schema, table, start_date, end_date) -> int:
+    """Count how many rows have a NULL label in the given date range."""
+    query = text(f"""
+        SELECT COUNT(*) FROM {schema}.{table} 
+        WHERE label IS NULL 
+        AND date_time >= :start AND date_time <= :end
+    """)
+    with engine.connect() as conn:
+        result = conn.execute(query, {"start": start_date, "end": end_date}).scalar()
+    return result
 
 if __name__ == "__main__":
     setup_schema()

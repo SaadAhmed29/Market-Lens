@@ -81,93 +81,7 @@ def get_reddit_client():
     )
 
 
-# Database
-
-def get_connection():
-    from utils.db import DB_CONFIG
-    database_url = os.environ.get("DATABASE_URL")
-    if database_url:
-        return psycopg2.connect(database_url)
-    return psycopg2.connect(
-        host=DB_CONFIG["host"],
-        port=DB_CONFIG["port"],
-        dbname=DB_CONFIG["name"],
-        user=DB_CONFIG["user"],
-        password=DB_CONFIG["password"],
-    )
-
-
-def get_existing_range(conn, symbol):
-    """Return (min_date_time, max_date_time) already stored for this
-    symbol, or (None, None) if nothing stored yet."""
-    query = f"""
-        SELECT MIN(date_time), MAX(date_time)
-        FROM {SCHEMA_NAME}.{TABLE_NAME}
-        WHERE symbol = %s
-    """
-    with conn.cursor() as cur:
-        cur.execute(query, (symbol,))
-        return cur.fetchone()
-
-
-def get_missing_ranges(conn, symbol, start, end):
-    """Compare the requested [start, end] window against what's already
-    stored for this symbol, and return only the missing sub-range(s).
-
-    NOTE: this assumes contiguous coverage (extending the stored range
-    forward and/or backward). It will not detect isolated gaps *inside*
-    an already-covered range — good enough for a rolling/incremental
-    fetch pattern, but not a general-purpose gap filler.
-    """
-    existing_min, existing_max = get_existing_range(conn, symbol)
-
-    if existing_min is None:
-        return [(start, end)]
-
-    missing = []
-    if start < existing_min:
-        missing.append((start, min(existing_min, end)))
-    if end > existing_max:
-        missing.append((max(existing_max, start), end))
-
-    if not missing:
-        log.info(
-            "Symbol %s: requested range %s -> %s already covered by stored "
-            "data (%s -> %s), skipping.",
-            symbol, start.date(), end.date(), existing_min.date(), existing_max.date()
-        )
-    return missing
-
-
-def save_items(conn, items: list, symbol: str):
-    if not items:
-        return
-
-    rows = [
-        (
-            item["source_id"],
-            symbol,
-            item["subreddit"],
-            item["title"],
-            item["body"],
-            item["score"],
-            item["num_comments"],
-            item["date_time"],
-            Json(item["comments"]),
-        )
-        for item in items
-    ]
-
-    query = f"""
-        INSERT INTO {SCHEMA_NAME}.{TABLE_NAME}
-        (source_id, symbol, subreddit, title, body, score, num_comments,
-         date_time, comments)
-        VALUES %s
-        ON CONFLICT (source_id) DO NOTHING
-    """
-    with conn.cursor() as cur:
-        execute_values(cur, query, rows)
-    conn.commit()
+from sentiment_analysis.db import get_connection, get_missing_ranges, save_raw_items
 
 
 # Fetch helpers
@@ -233,7 +147,7 @@ def backfill_symbol(conn, reddit, symbol: str):
     subreddits = SYMBOL_SUBREDDITS.get(symbol, [])
     keyword = SYMBOL_KEYWORDS.get(symbol, symbol.lower())
 
-    ranges = get_missing_ranges(conn, symbol, START_DATE, END_DATE)
+    ranges = get_missing_ranges(conn, SCHEMA_NAME, TABLE_NAME, START_DATE, END_DATE, symbol)
     if not ranges:
         return
 
@@ -243,12 +157,12 @@ def backfill_symbol(conn, reddit, symbol: str):
 
         for sub in subreddits:
             posts = fetch_posts_in_range(reddit, sub, start_ts, end_ts, query=None)
-            save_items(conn, posts, symbol)
+            save_raw_items(conn, posts, symbol, SCHEMA_NAME, TABLE_NAME)
             log.info("  r/%s: +%d posts", sub, len(posts))
 
         for sub in GENERAL_SUBREDDITS:
             posts = fetch_posts_in_range(reddit, sub, start_ts, end_ts, query=keyword)
-            save_items(conn, posts, symbol)
+            save_raw_items(conn, posts, symbol, SCHEMA_NAME, TABLE_NAME)
             log.info("  r/%s (keyword='%s'): +%d posts", sub, keyword, len(posts))
 
 

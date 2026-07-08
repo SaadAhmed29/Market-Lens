@@ -1,53 +1,84 @@
 """
-Fetches historical Reddit posts + comments for a set of crypto
-symbols using PullPush.io (primary) and Arctic Shift (fallback), storing
-results in the `sentiment_data.raw_data` table of an existing Postgres
-database.
+Fetches Reddit posts (with embedded top-N comments) for a set of crypto
+symbols within a configurable date range, using the official Reddit API
+via PRAW. Checks sentiment_data.raw_data first and only fetches the
+portion of the date range not already stored, so reruns are cheap.
 """
 
 import os
-import time
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 
-import requests
+import praw
 import psycopg2
-from psycopg2.extras import execute_values
+from psycopg2.extras import execute_values, Json
+
+from dotenv import load_dotenv
+load_dotenv()
 
 # Config
 
 SCHEMA_NAME = "sentiment_data"
 TABLE_NAME = "raw_data"
-
-DAYS_BACK = 90          # how far back to backfill
-CHUNK_DAYS = 5           # window size per request batch (avoids timeouts)
-PAGE_SIZE = 100          # PullPush max results per call
-REQUEST_DELAY_SEC = 1.0  # be polite to the free API
-MAX_RETRIES = 3
-RETRY_BACKOFF_SEC = 5
-
-PULLPUSH_BASE = "https://api.pullpush.io/reddit/search"
-ARCTIC_SHIFT_BASE = "https://arctic-shift.photon-reddit.com/api"
+TOP_N_COMMENTS = 10
+LISTING_LIMIT = 1000  # Reddit's practical ceiling per listing/search query
 
 # symbol -> list of subreddits to search
 SYMBOL_SUBREDDITS = {
     "BTC": ["Bitcoin"],
+    "ETH": ["ethereum"],
+    "SOL": ["solana"],
+    "MINA": ["mina"],
+    "ADA": ["cardano"],
+    "DOGE": ["dogecoin"],
+    "SUI": ["sui"],
+    "LTC": ["litecoin"],
 }
 
 # also search these general subreddits for keyword mentions of each symbol
 GENERAL_SUBREDDITS = ["CryptoCurrency", "CryptoMarkets"]
 
-# keyword used for general-subreddit search per symbol (full name works better
-# than the raw ticker, since tickers like SOL/ADA are common English words)
+# keyword used for general-subreddit search per symbol (full name works
+# better than the raw ticker, since tickers like SOL/ADA are common words)
 SYMBOL_KEYWORDS = {
-    "BTC": "bitcoin", 
+    "BTC": "bitcoin",
+    "ETH": "ethereum",
+    "SOL": "solana",
+    "MINA": "mina",
+    "ADA": "cardano",
+    "DOGE": "dogecoin",
+    "SUI": "sui",
+    "LTC": "litecoin",
 }
+
+
+def _parse_date(date_str, default=None):
+    if not date_str:
+        return default
+    return datetime.strptime(date_str, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+
+
+FETCH_START_DATE = "2026-01-01"
+FETCH_END_DATE = "2026-07-07"
+
+START_DATE = _parse_date(FETCH_START_DATE)
+END_DATE = _parse_date(FETCH_END_DATE, default=datetime.now(timezone.utc))
 
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(message)s",
 )
 log = logging.getLogger(__name__)
+
+
+# Reddit client (PRAW)
+
+def get_reddit_client():
+    return praw.Reddit(
+        client_id=os.getenv("client_id"),
+        client_secret=os.getenv("client_secret"),
+        user_agent=os.getenv("user_agent"),
+    )
 
 
 # Database
@@ -66,6 +97,47 @@ def get_connection():
     )
 
 
+def get_existing_range(conn, symbol):
+    """Return (min_date_time, max_date_time) already stored for this
+    symbol, or (None, None) if nothing stored yet."""
+    query = f"""
+        SELECT MIN(date_time), MAX(date_time)
+        FROM {SCHEMA_NAME}.{TABLE_NAME}
+        WHERE symbol = %s
+    """
+    with conn.cursor() as cur:
+        cur.execute(query, (symbol,))
+        return cur.fetchone()
+
+
+def get_missing_ranges(conn, symbol, start, end):
+    """Compare the requested [start, end] window against what's already
+    stored for this symbol, and return only the missing sub-range(s).
+
+    NOTE: this assumes contiguous coverage (extending the stored range
+    forward and/or backward). It will not detect isolated gaps *inside*
+    an already-covered range — good enough for a rolling/incremental
+    fetch pattern, but not a general-purpose gap filler.
+    """
+    existing_min, existing_max = get_existing_range(conn, symbol)
+
+    if existing_min is None:
+        return [(start, end)]
+
+    missing = []
+    if start < existing_min:
+        missing.append((start, min(existing_min, end)))
+    if end > existing_max:
+        missing.append((max(existing_max, start), end))
+
+    if not missing:
+        log.info(
+            "Symbol %s: requested range %s -> %s already covered by stored "
+            "data (%s -> %s), skipping.",
+            symbol, start.date(), end.date(), existing_min.date(), existing_max.date()
+        )
+    return missing
+
 
 def save_items(conn, items: list, symbol: str):
     if not items:
@@ -73,265 +145,122 @@ def save_items(conn, items: list, symbol: str):
 
     rows = [
         (
+            item["source_id"],
             symbol,
-            item.get("subreddit"),
-            item.get("title", ""),
-            item.get("selftext") or item.get("body") or "",
-            item.get("score", 0),
-            item.get("num_comments", 0),
+            item["subreddit"],
+            item["title"],
+            item["body"],
+            item["score"],
+            item["num_comments"],
+            item["date_time"],
+            Json(item["comments"]),
         )
         for item in items
     ]
 
     query = f"""
         INSERT INTO {SCHEMA_NAME}.{TABLE_NAME}
-        (symbol, subreddit, title, body, score, num_comments)
+        (source_id, symbol, subreddit, title, body, score, num_comments,
+         date_time, comments)
         VALUES %s
+        ON CONFLICT (source_id) DO NOTHING
     """
-
     with conn.cursor() as cur:
         execute_values(cur, query, rows)
     conn.commit()
 
 
-# PullPush client (primary)
+# Fetch helpers
 
-def _request_with_retries(url: str, params: dict) -> dict | None:
-    for attempt in range(1, MAX_RETRIES + 1):
-        try:
-            resp = requests.get(url, params=params, timeout=30)
-            if resp.status_code == 200:
-                return resp.json()
-            log.warning(
-                "Non-200 response (%s) on attempt %d/%d: %s",
-                resp.status_code, attempt, MAX_RETRIES, resp.text[:200]
-            )
-        except requests.RequestException as e:
-            log.warning("Request failed (attempt %d/%d): %s", attempt, MAX_RETRIES, e)
-        time.sleep(RETRY_BACKOFF_SEC * attempt)
-    return None
-
-
-def pullpush_search(
-    mode: str,           # "submission" or "comment"
-    subreddit: str = None,
-    query: str = None,
-    after_ts: int = None,
-    before_ts: int = None,
-    size: int = PAGE_SIZE,
-) -> list:
-    url = f"{PULLPUSH_BASE}/{mode}/"
-    params = {"size": size, "sort": "asc", "sort_type": "created_utc"}
-    if subreddit:
-        params["subreddit"] = subreddit
-    if query:
-        params["q"] = query
-    if after_ts:
-        params["after"] = after_ts
-    if before_ts:
-        params["before"] = before_ts
-
-    data = _request_with_retries(url, params)
-    if data is None:
+def fetch_top_comments(submission, limit: int = TOP_N_COMMENTS) -> list:
+    """Return up to `limit` top-level comments sorted by score, as a list
+    of small dicts, ready to store as JSON."""
+    try:
+        submission.comment_sort = "top"
+        submission.comments.replace_more(limit=0)
+        top = []
+        for comment in submission.comments[:limit]:
+            top.append({
+                "id": comment.id,
+                "author": str(comment.author) if comment.author else None,
+                "body": comment.body,
+                "score": comment.score,
+            })
+        return top
+    except Exception as e:
+        log.warning("Failed to fetch comments for post %s: %s", submission.id, e)
         return []
-    return data.get("data", [])
 
 
-# Arctic Shift client (fallback — subreddit-scoped only, no cross-sub q param)
+def fetch_posts_in_range(reddit, subreddit_name: str, start_ts: float, end_ts: float, query: str = None) -> list:
+    """Fetch posts from a subreddit within [start_ts, end_ts], newest first.
 
-def arctic_shift_search(
-    mode: str,           # "posts" or "comments"
-    subreddit: str,
-    after_ts: int,
-    before_ts: int,
-    query: str = None,
-    limit="auto",        # 1-100, or "auto" (100-1000 depending on server load)
-) -> list:
-    url = f"{ARCTIC_SHIFT_BASE}/{mode}/search"
-    params = {
-        "subreddit": subreddit,
-        "after": after_ts,     # Arctic Shift accepts epoch seconds directly
-        "before": before_ts,
-        "sort": "asc",
-        "limit": limit,
-    }
-    if query:
-        # posts use `query` (searches title+selftext), comments use `body`
-        params["query" if mode == "posts" else "body"] = query
+    See module docstring: limited to Reddit's ~1000-item listing ceiling,
+    so this only reliably covers recent windows.
+    """
+    subreddit = reddit.subreddit(subreddit_name)
+    listing = (
+        subreddit.search(query, sort="new", limit=LISTING_LIMIT)
+        if query else
+        subreddit.new(limit=LISTING_LIMIT)
+    )
 
-    data = _request_with_retries(url, params)
-    if data is None:
-        return []
-    return data.get("data", [])
+    results = []
+    for submission in listing:
+        created = submission.created_utc
+        if created > end_ts:
+            continue  # newer than our window — keep scanning
+        if created < start_ts:
+            break  # sorted newest-first, so we're past our window now
 
+        results.append({
+            "source_id": submission.id,
+            "subreddit": subreddit_name,
+            "title": submission.title or "",
+            "body": submission.selftext or "",
+            "score": submission.score,
+            "num_comments": submission.num_comments,
+            "date_time": datetime.fromtimestamp(created, tz=timezone.utc),
+            "comments": fetch_top_comments(submission),
+        })
 
-def arctic_shift_search_paginated(
-    mode: str,           # "posts" or "comments"
-    subreddit: str,
-    start_ts: int,
-    end_ts: int,
-    query: str = None,
-) -> list:
-    """Paginate Arctic Shift the same way as PullPush: advance `after`
-    using the last item's created_utc until the window is exhausted."""
-    all_items = []
-    cursor = start_ts
-    while cursor < end_ts:
-        batch = arctic_shift_search(mode, subreddit, cursor, end_ts, query=query)
-        if not batch:
-            break
-        all_items.extend(batch)
-        last_created = batch[-1].get("created_utc", cursor)
-        if last_created <= cursor:
-            break  # safety: avoid infinite loop if the API doesn't advance
-        cursor = last_created + 1
-        time.sleep(REQUEST_DELAY_SEC)
-    return all_items
+    return results
 
 
-# Fetch orchestration
+# Orchestration
 
-def fetch_window(
-    symbol: str,
-    subreddit: str,
-    start_ts: int,
-    end_ts: int,
-    query: str = None,
-) -> tuple:
-    """Fetch submissions + comments for one subreddit/time-window,
-    paginating until exhausted. Falls back to Arctic Shift if PullPush
-    returns nothing (e.g. during an outage)."""
-
-    all_submissions = []
-    all_comments = []
-
-    # ---- submissions, paginated ----
-    cursor = start_ts
-    while cursor < end_ts:
-        batch = pullpush_search(
-            mode="submission",
-            subreddit=subreddit,
-            query=query,
-            after_ts=cursor,
-            before_ts=end_ts,
-        )
-        if not batch:
-            break
-        all_submissions.extend(batch)
-        last_created = batch[-1].get("created_utc", cursor)
-        if last_created <= cursor:
-            break  # safety: avoid infinite loop if API doesn't advance
-        cursor = last_created + 1
-        time.sleep(REQUEST_DELAY_SEC)
-        if len(batch) < PAGE_SIZE:
-            break  # last page
-
-    # ---- comments, paginated ----
-    cursor = start_ts
-    while cursor < end_ts:
-        batch = pullpush_search(
-            mode="comment",
-            subreddit=subreddit,
-            query=query,
-            after_ts=cursor,
-            before_ts=end_ts,
-        )
-        if not batch:
-            break
-        all_comments.extend(batch)
-        last_created = batch[-1].get("created_utc", cursor)
-        if last_created <= cursor:
-            break
-        cursor = last_created + 1
-        time.sleep(REQUEST_DELAY_SEC)
-        if len(batch) < PAGE_SIZE:
-            break
-
-    # ---- fallback to Arctic Shift if PullPush gave us nothing at all ----
-    if not all_submissions and not all_comments:
-        log.info(
-            "PullPush returned nothing for r/%s (%s), trying Arctic Shift fallback",
-            subreddit, symbol
-        )
-        all_submissions = arctic_shift_search_paginated(
-            "posts", subreddit, start_ts, end_ts, query=query
-        )
-        all_comments = arctic_shift_search_paginated(
-            "comments", subreddit, start_ts, end_ts, query=query
-        )
-
-    return all_submissions, all_comments
-
-
-def backfill_symbol(conn, symbol: str, days_back: int = DAYS_BACK):
-    end = datetime.now(timezone.utc)
-    start = end - timedelta(days=days_back)
-
+def backfill_symbol(conn, reddit, symbol: str):
     subreddits = SYMBOL_SUBREDDITS.get(symbol, [])
     keyword = SYMBOL_KEYWORDS.get(symbol, symbol.lower())
 
-    # 1) dedicated subreddits — no keyword filter needed, whole sub is on-topic
-    for sub in subreddits:
-        log.info("Backfilling r/%s for %s ...", sub, symbol)
-        _backfill_subreddit_chunked(conn, symbol, sub, start, end, query=None)
+    ranges = get_missing_ranges(conn, symbol, START_DATE, END_DATE)
+    if not ranges:
+        return
 
-    # 2) general subreddits — filter by keyword since they cover many coins
-    for sub in GENERAL_SUBREDDITS:
-        log.info("Backfilling r/%s for %s (keyword='%s') ...", sub, symbol, keyword)
-        _backfill_subreddit_chunked(conn, symbol, sub, start, end, query=keyword)
+    for start, end in ranges:
+        log.info("Fetching %s for missing range %s -> %s", symbol, start.date(), end.date())
+        start_ts, end_ts = start.timestamp(), end.timestamp()
 
+        for sub in subreddits:
+            posts = fetch_posts_in_range(reddit, sub, start_ts, end_ts, query=None)
+            save_items(conn, posts, symbol)
+            log.info("  r/%s: +%d posts", sub, len(posts))
 
-def _backfill_subreddit_chunked(
-    conn,
-    symbol: str,
-    subreddit: str,
-    start: datetime,
-    end: datetime,
-    query: str = None,
-):
-    current = start
-    total_posts, total_comments = 0, 0
+        for sub in GENERAL_SUBREDDITS:
+            posts = fetch_posts_in_range(reddit, sub, start_ts, end_ts, query=keyword)
+            save_items(conn, posts, symbol)
+            log.info("  r/%s (keyword='%s'): +%d posts", sub, keyword, len(posts))
 
-    while current < end:
-        chunk_end = min(current + timedelta(days=CHUNK_DAYS), end)
-        start_ts = int(current.timestamp())
-        end_ts = int(chunk_end.timestamp())
-
-        submissions, comments = fetch_window(symbol, subreddit, start_ts, end_ts, query)
-
-        if submissions:
-            save_items(conn, submissions, symbol)
-            total_posts += len(submissions)
-        if comments:
-            save_items(conn, comments, symbol)
-            total_comments += len(comments)
-
-        log.info(
-            "  %s: %s -> %s | +%d posts, +%d comments",
-            subreddit, current.date(), chunk_end.date(), len(submissions), len(comments)
-        )
-
-        current = chunk_end
-
-    log.info(
-        "Done r/%s for %s: %d posts, %d comments total",
-        subreddit, symbol, total_posts, total_comments
-    )
-
-
-# Entry point
 
 def main():
+    reddit = get_reddit_client()
     conn = get_connection()
     try:
         for symbol in SYMBOL_SUBREDDITS:
-            backfill_symbol(conn, symbol)
+            backfill_symbol(conn, reddit, symbol)
     finally:
         conn.close()
-    log.info(
-        "Backfill complete. Data stored in %s.%s",
-        SCHEMA_NAME, TABLE_NAME
-    )
+    log.info("Fetch complete. Data stored in %s.%s", SCHEMA_NAME, TABLE_NAME)
 
 
 if __name__ == "__main__":

@@ -3,6 +3,7 @@ Reads cleaned posts from sentiment_data.cleaned_data, classifies them using FinB
 and writes the results (label and confidence_score) back to the same table.
 """
 
+import json
 import logging
 import pandas as pd
 from sqlalchemy import text
@@ -32,8 +33,8 @@ def ensure_columns(engine):
 
 
 def load_data(engine) -> pd.DataFrame:
-    """Read first 5k rows from cleaned_data."""
-    query = f"SELECT pk, title, body FROM {SCHEMA}.{TABLE} ORDER BY pk LIMIT 5000"
+    """Read all rows from cleaned_data."""
+    query = f"SELECT pk, title, body, comments FROM {SCHEMA}.{TABLE} ORDER BY pk"
     df = pd.read_sql(query, engine)
     log.info("Loaded %d rows from %s.%s", len(df), SCHEMA, TABLE)
     return df
@@ -55,11 +56,40 @@ def classify(df: pd.DataFrame) -> pd.DataFrame:
     )
 
     def combine_text(row):
-        title = str(row['title']) if pd.notna(row['title']) and row['title'] else ""
-        body = str(row['body']) if pd.notna(row['body']) and row['body'] else ""
-        if title:
-            return f"{title} {body}".strip()
-        return body.strip()
+        t_val = row.get('title')
+        title = str(t_val).strip() if t_val is not None and not (isinstance(t_val, float) and pd.isna(t_val)) and str(t_val).strip() else ""
+        
+        b_val = row.get('body')
+        body = str(b_val).strip() if b_val is not None and not (isinstance(b_val, float) and pd.isna(b_val)) and str(b_val).strip() else ""
+        
+        parts = [
+            f"post: {title}" if title else "post:",
+            f"body: {body}" if body else "body:"
+        ]
+        
+        comments_val = row.get('comments')
+        try:
+            if isinstance(comments_val, str):
+                comments = json.loads(comments_val) if comments_val.strip() else []
+            elif isinstance(comments_val, float) and pd.isna(comments_val):
+                comments = []
+            elif hasattr(comments_val, 'tolist'):
+                comments = comments_val.tolist()
+            else:
+                comments = comments_val
+                
+            if isinstance(comments, (list, tuple)):
+                for i, c in enumerate(comments, 1):
+                    if isinstance(c, dict):
+                        c_body = str(c.get('body', '')).strip()
+                        if c_body:
+                            parts.append(f"comment{i}: {c_body}")
+                        else:
+                            parts.append(f"comment{i}:")
+        except Exception:
+            pass
+                
+        return " ".join(parts).replace('\n', ' ').replace('\r', ' ')
 
     log.info("Combining text...")
     texts = df.apply(combine_text, axis=1).tolist()

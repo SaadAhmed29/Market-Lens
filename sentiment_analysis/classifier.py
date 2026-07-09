@@ -3,7 +3,7 @@ Reads cleaned posts from sentiment_data.cleaned_data, classifies them using FinB
 and writes the results (label and confidence_score) back to the same table.
 """
 
-import json
+
 import logging
 import pandas as pd
 from transformers import pipeline
@@ -50,19 +50,17 @@ def classify(df: pd.DataFrame) -> pd.DataFrame:
         
         comments_val = row.get('comments')
         try:
-            if isinstance(comments_val, str):
-                comments = json.loads(comments_val) if comments_val.strip() else []
-            elif isinstance(comments_val, float) and pd.isna(comments_val):
-                comments = []
-            elif hasattr(comments_val, 'tolist'):
+            if hasattr(comments_val, 'tolist'):
                 comments = comments_val.tolist()
-            else:
+            elif isinstance(comments_val, list):
                 comments = comments_val
+            else:
+                comments = []
                 
             if isinstance(comments, (list, tuple)):
                 for i, c in enumerate(comments, 1):
-                    if isinstance(c, dict):
-                        c_body = str(c.get('body', '')).strip()
+                    if isinstance(c, str):
+                        c_body = c.strip()
                         if c_body:
                             parts.append(f"comment{i}: {c_body}")
                         else:

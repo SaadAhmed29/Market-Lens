@@ -21,7 +21,7 @@ load_dotenv()
 SCHEMA_NAME = "sentiment_data"
 TABLE_NAME = "raw_data"
 TOP_N_COMMENTS = 10
-LISTING_LIMIT = 1000  # Reddit's practical ceiling per listing/search query
+LISTING_LIMIT = 10  # Reddit's practical ceiling per listing/search query
 
 # symbol -> list of subreddits to search
 SYMBOL_SUBREDDITS = {
@@ -58,8 +58,8 @@ def _parse_date(date_str, default=None):
     return datetime.strptime(date_str, "%Y-%m-%d").replace(tzinfo=timezone.utc)
 
 
-FETCH_START_DATE = "2026-01-01"
-FETCH_END_DATE = "2026-07-07"
+FETCH_START_DATE = "2026-07-08"
+FETCH_END_DATE = "2026-07-09"
 
 START_DATE = _parse_date(FETCH_START_DATE)
 END_DATE = _parse_date(FETCH_END_DATE, default=datetime.now(timezone.utc))
@@ -94,12 +94,7 @@ def fetch_top_comments(submission, limit: int = TOP_N_COMMENTS) -> list:
         submission.comments.replace_more(limit=0)
         top = []
         for comment in submission.comments[:limit]:
-            top.append({
-                "id": comment.id,
-                "author": str(comment.author) if comment.author else None,
-                "body": comment.body,
-                "score": comment.score,
-            })
+            top.append(comment.body)
         return top
     except Exception as e:
         log.warning("Failed to fetch comments for post %s: %s", submission.id, e)

@@ -5,10 +5,10 @@ with two tables (raw_data, cleaned_data) sharing an identical column structure.
 
 import os
 import logging
-import json
+
 import pandas as pd
 import psycopg2
-from psycopg2.extras import execute_values, Json
+from psycopg2.extras import execute_values
 from sqlalchemy import text
 from utils.db import DB_CONFIG
 from sqlalchemy import text
@@ -36,8 +36,7 @@ CREATE TABLE IF NOT EXISTS {schema}.{table} (
     score             INTEGER,
     num_comments      INTEGER,
     date_time         TIMESTAMPTZ,
-    comments          JSONB,
-    fetched_at        TIMESTAMPTZ DEFAULT now()
+    comments          TEXT[]
 );
 """
 
@@ -52,8 +51,7 @@ LABEL_COLUMNS_DDL = [
 # a table created by an earlier version of this schema.
 BASE_ALTER_STATEMENTS = [
     "ALTER TABLE {schema}.{table} ADD COLUMN IF NOT EXISTS date_time TIMESTAMPTZ;",
-    "ALTER TABLE {schema}.{table} ADD COLUMN IF NOT EXISTS comments JSONB;",
-    "ALTER TABLE {schema}.{table} ADD COLUMN IF NOT EXISTS fetched_at TIMESTAMPTZ DEFAULT now();",
+    "ALTER TABLE {schema}.{table} ADD COLUMN IF NOT EXISTS comments TEXT[];",
 ]
 
 # If label/confidence_score were mistakenly added to raw_data by an earlier
@@ -178,7 +176,7 @@ def save_raw_items(conn, items: list, symbol: str, schema: str, table: str):
             item["score"],
             item["num_comments"],
             item["date_time"],
-            Json(item["comments"]),
+            item["comments"],
         )
         for item in items
     ]
@@ -217,9 +215,6 @@ def _upsert_on_conflict(table, conn, keys, data_iter):
 def save_cleaned_data(engine, df: pd.DataFrame, schema: str, table: str) -> None:
     """Write cleaned rows into the cleaned_data table."""
     cols = [c for c in df.columns if c != "pk"]
-    
-    if "comments" in df.columns:
-        df["comments"] = df["comments"].apply(lambda x: json.dumps(x) if isinstance(x, (list, dict)) else x)
         
     df[cols].to_sql(
         table,

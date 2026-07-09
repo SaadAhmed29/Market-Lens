@@ -5,7 +5,7 @@ deduplicates, and saves results into sentiment_data.cleaned_data.
 
 import re
 import logging
-import json
+
 
 import emoji
 import pandas as pd
@@ -54,7 +54,7 @@ def _clean_text(text: str) -> str:
 
 
 def _clean_comments(comments_val):
-    """Parse comments, clean each body, filter empty or non-English, and repack."""
+    """Clean each comment string, filter empty or non-English, and repack."""
     if comments_val is None:
         return comments_val
     if isinstance(comments_val, float) and pd.isna(comments_val):
@@ -62,12 +62,8 @@ def _clean_comments(comments_val):
     if isinstance(comments_val, (list, str, dict)) and not comments_val:
         return comments_val
         
-    is_str = isinstance(comments_val, str)
-    if is_str:
-        try:
-            comments_list = json.loads(comments_val)
-        except json.JSONDecodeError:
-            return comments_val
+    if hasattr(comments_val, 'tolist'):
+        comments_list = comments_val.tolist()
     elif isinstance(comments_val, list):
         comments_list = comments_val
     else:
@@ -75,25 +71,20 @@ def _clean_comments(comments_val):
         
     cleaned_comments = []
     for comment in comments_list:
-        if not isinstance(comment, dict) or 'body' not in comment:
+        if not isinstance(comment, str):
             continue
             
-        cleaned_body = _clean_text(comment['body'])
+        cleaned_body = _clean_text(comment)
         if not cleaned_body:
             continue
             
         try:
             if detect(cleaned_body) == 'en':
-                # Important: create a new dictionary to avoid modifying the original if passed by reference
-                cleaned_comment = comment.copy()
-                cleaned_comment['body'] = cleaned_body
-                cleaned_comments.append(cleaned_comment)
+                cleaned_comments.append(cleaned_body)
         except LangDetectException:
             continue
             
-    if is_str:
-        return json.dumps(cleaned_comments)
-    return json.dumps(cleaned_comments) if is_str else cleaned_comments
+    return cleaned_comments
 
 
 # Pipeline

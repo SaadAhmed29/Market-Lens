@@ -214,6 +214,35 @@ def save_ledger(ledger_df: pd.DataFrame, strategy_name: str) -> None:
     )
     print(f"[v] Saved ledger to {schema}.{table}")
 
+def create_signal_schema() -> None:
+    """Create the signal schema if it does not exist."""
+    engine = get_engine()
+    with engine.begin() as conn:
+        conn.execute(text("CREATE SCHEMA IF NOT EXISTS signal"))
+    print("[v] signal schema ensured.")
+
+def save_signals(signal_df: pd.DataFrame, strategy_name: str) -> None:
+    """Save signal dataframe to the signal schema, replacing any existing table."""
+    if signal_df is None or signal_df.empty:
+        return
+        
+    engine = get_engine()
+    schema = 'signal'
+    table = f"{strategy_name.lower()}_signal"
+    
+    signal_col = 'signal' if 'signal' in signal_df.columns else signal_df.columns[0]
+    df_to_save = signal_df[[signal_col]].copy()
+    df_to_save = df_to_save.rename(columns={signal_col: 'signal'})
+    df_to_save.index.name = 'date_time'
+    
+    df_to_save.to_sql(
+        table,
+        engine,
+        schema=schema,
+        if_exists='replace',
+        index=True
+    )
+    print(f"[v] Saved signals to {schema}.{table}")
 
 def create_meta_data_schema() -> None:
     """Create the meta_data schema and data_config table with sensible defaults.

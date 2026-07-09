@@ -4,11 +4,11 @@ import numpy as np
 from utils.config import load_config
 from data.data_downloader import DataFetcher
 from signals.main import get_signal_df
-from utils.db import save_ledger
-
+from utils.db import save_ledger, create_signal_schema, save_signals
 
 class BacktestEngine:
     def __init__(self, config: dict):
+        create_signal_schema()
         self.config = config
         self.ohlcv_df = None
         self.signal_df = None
@@ -61,6 +61,10 @@ class BacktestEngine:
             )
         except TypeError:
             self.signal_df = get_signal_df()
+            
+        if self.signal_df is not None and not self.signal_df.empty:
+            strategy_name = self.config.get('strategy_name', 'default_strategy')
+            save_signals(self.signal_df, strategy_name)
 
     # Preparation pipeline
     def prepare(self):

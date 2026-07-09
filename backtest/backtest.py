@@ -1,19 +1,15 @@
 import pandas as pd
 import numpy as np
-import base64
-import io
-import matplotlib
-matplotlib.use('Agg')
-import matplotlib.pyplot as plt
 
 from utils.config import load_config
 from data.data_downloader import DataFetcher
 from signals.main import get_signal_df
+from utils.db import save_ledger
 
 
 class BacktestEngine:
-    def __init__(self, config_path: str):
-        self.config = load_config(config_path)
+    def __init__(self, config: dict):
+        self.config = config
         self.ohlcv_df = None
         self.signal_df = None
 
@@ -39,12 +35,19 @@ class BacktestEngine:
             symbol=self.config.get('symbol', 'BTC'),
             start=self.config.get('start_date'),
             end=self.config.get('end_date'),
-            time_frame="1m",
+            time_frame='1m',
             resample_1m=False
         )
         self.ohlcv_df = df
 
     def load_signals(self):
+        from signals.main import _extract_indicators_for_strategy
+        from utils.config import load_config
+        
+        strategy_config = self.config.get('strategy_config', {})
+        indicator_config = load_config("indicators/config.yaml")
+        selected_indicators = _extract_indicators_for_strategy(strategy_config, indicator_config)
+        
         try:
             self.signal_df = get_signal_df(
                 save_csv=False,
@@ -52,8 +55,9 @@ class BacktestEngine:
                 symbol=self.config.get('symbol', 'BTC'),
                 start=self.config.get('start_date'),
                 end=self.config.get('end_date'),
-                strategy_name='rsi_strategy',
-                selected_indicators=['RSI']
+                strategy_name=self.config.get('strategy_name', 'default_strategy'),
+                selected_indicators=selected_indicators,
+                strategy_config=strategy_config
             )
         except TypeError:
             self.signal_df = get_signal_df()
@@ -460,285 +464,15 @@ class BacktestEngine:
             'loss_count': self.loss_count,
         }
 
-    # HTML report
-    def _fig_to_base64(self, fig):
-        buf = io.BytesIO()
-        fig.savefig(buf, format='png', dpi=150, bbox_inches='tight', facecolor=fig.get_facecolor())
-        plt.close(fig)
-        buf.seek(0)
-        return base64.b64encode(buf.read()).decode('utf-8')
-
-    def _render_curve_chart(self):
-        bg = '#0B0E14'
-        grid = '#1C2230'
-        text = '#8B92A5'
-        equity_color = '#00D9A3'
-        balance_color = '#5B8DEF'
-
-        fig, ax = plt.subplots(figsize=(11, 3.6), facecolor=bg)
-        ax.set_facecolor(bg)
-
-        ax.plot(self.equity_curve.index, self.equity_curve.values,
-                color=equity_color, linewidth=1.4, label='Equity (mark-to-market)')
-        ax.plot(self.balance_history.index, self.balance_history.values,
-                color=balance_color, linewidth=1.1, linestyle='--', label='Balance (realized)', alpha=0.8)
-
-        ax.fill_between(self.equity_curve.index, self.equity_curve.values,
-                         self.equity_curve.min(), color=equity_color, alpha=0.06)
-
-        ax.grid(True, color=grid, linewidth=0.6)
-        ax.tick_params(colors=text, labelsize=8)
-        for spine in ax.spines.values():
-            spine.set_color(grid)
-        ax.set_ylabel('Balance', color=text, fontsize=9)
-        legend = ax.legend(loc='upper left', frameon=False, fontsize=8, labelcolor=text)
-        fig.tight_layout()
-        return self._fig_to_base64(fig)
-
-    def _render_drawdown_chart(self):
-        bg = '#0B0E14'
-        grid = '#1C2230'
-        text = '#8B92A5'
-        dd_color = '#FF5C5C'
-
-        fig, ax = plt.subplots(figsize=(11, 2.0), facecolor=bg)
-        ax.set_facecolor(bg)
-
-        dd_pct = self.drawdown_series.values * 100
-        ax.fill_between(self.drawdown_series.index, dd_pct, 0, color=dd_color, alpha=0.25)
-        ax.plot(self.drawdown_series.index, dd_pct, color=dd_color, linewidth=1.0)
-
-        ax.grid(True, color=grid, linewidth=0.6)
-        ax.tick_params(colors=text, labelsize=8)
-        for spine in ax.spines.values():
-            spine.set_color(grid)
-        ax.set_ylabel('Drawdown %', color=text, fontsize=9)
-        fig.tight_layout()
-        return self._fig_to_base64(fig)
-
-    def _ledger_rows_html(self):
-        if self.trade_ledger is None or self.trade_ledger.empty:
-            return '<tr><td colspan="11" class="empty">No trades were executed.</td></tr>'
-
-        rows = []
-        for i, r in self.trade_ledger.iterrows():
-            pnl_class = 'pos' if r['net_pnl'] > 0 else 'neg'
-            dir_class = 'long' if r['direction'] == 'long' else 'short'
-            reason = r.get('exit_reason', '')
-            rows.append(f"""
-            <tr>
-              <td>{i + 1}</td>
-              <td>{r['entry_time']}</td>
-              <td>{r['exit_time']}</td>
-              <td><span class="badge {dir_class}">{r['direction'].upper()}</span></td>
-              <td class="num">{r['entry_price']:.4f}</td>
-              <td class="num">{r['exit_price']:.4f}</td>
-              <td class="num">{r['quantity']:.6f}</td>
-              <td class="num">{r['gross_pnl']:.2f}</td>
-              <td class="num">{r['commission'] + r['slippage']:.2f}</td>
-              <td class="num {pnl_class}">{r['net_pnl']:+.2f}</td>
-              <td class="num">{r['balance_after_trade']:.2f}</td>
-              <td><span class="tag">{reason}</span></td>
-            </tr>""")
-        return ''.join(rows)
-
-    def generate_html_report(self, output_path='backtest_report.html'):
-        """
-        Renders a single self-contained HTML file: summary stats, the
-        equity/balance/drawdown curves, and the full trade ledger table.
-        Charts are embedded as base64 PNGs, so the file works completely
-        offline once generated.
-        """
-        curve_img = self._render_curve_chart()
-        dd_img = self._render_drawdown_chart()
-
-        initial_balance = self.config.get('initial_balance', 10000)
-        final_balance = self.final_balance if self.final_balance is not None else initial_balance
-        total_return_pct = ((final_balance / initial_balance) - 1) * 100
-        win_rate = (self.win_count / self.total_trades * 100) if self.total_trades else 0.0
-        max_dd_pct = self.drawdown_series.min() * 100 if self.drawdown_series is not None else 0.0
-
-        summary_cards = f"""
-        <div class="card"><div class="label">Final Balance</div><div class="value">{final_balance:,.2f}</div></div>
-        <div class="card"><div class="label">Total Net Profit</div><div class="value {'pos' if self.total_net_profit >= 0 else 'neg'}">{self.total_net_profit:+,.2f}</div></div>
-        <div class="card"><div class="label">Total Return</div><div class="value {'pos' if total_return_pct >= 0 else 'neg'}">{total_return_pct:+.2f}%</div></div>
-        <div class="card"><div class="label">Total Trades</div><div class="value">{self.total_trades}</div></div>
-        <div class="card"><div class="label">Win Rate</div><div class="value">{win_rate:.1f}%</div></div>
-        <div class="card"><div class="label">Wins / Losses</div><div class="value">{self.win_count} / {self.loss_count}</div></div>
-        <div class="card"><div class="label">Max Drawdown</div><div class="value neg">{max_dd_pct:.2f}%</div></div>
-        """
-
-        html = f"""<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<title>Backtest Report</title>
-<style>
-  :root {{
-    --bg: #0B0E14;
-    --panel: #10141D;
-    --border: #1C2230;
-    --text: #E8EAED;
-    --muted: #8B92A5;
-    --pos: #00D9A3;
-    --neg: #FF5C5C;
-    --accent: #5B8DEF;
-  }}
-  * {{ box-sizing: border-box; }}
-  body {{
-    margin: 0;
-    background: var(--bg);
-    color: var(--text);
-    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-    padding: 32px;
-  }}
-  h1 {{
-    font-family: -apple-system, ui-sans-serif, system-ui, sans-serif;
-    font-weight: 600;
-    font-size: 20px;
-    letter-spacing: 0.02em;
-    color: var(--text);
-    margin: 0 0 4px 0;
-  }}
-  .subtitle {{
-    color: var(--muted);
-    font-size: 12px;
-    margin-bottom: 24px;
-  }}
-  .cards {{
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-    gap: 12px;
-    margin-bottom: 28px;
-  }}
-  .card {{
-    background: var(--panel);
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    padding: 14px 16px;
-  }}
-  .card .label {{
-    color: var(--muted);
-    font-size: 11px;
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
-    margin-bottom: 6px;
-  }}
-  .card .value {{
-    font-size: 20px;
-    font-weight: 600;
-  }}
-  .pos {{ color: var(--pos); }}
-  .neg {{ color: var(--neg); }}
-  .panel {{
-    background: var(--panel);
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    padding: 16px;
-    margin-bottom: 20px;
-  }}
-  .panel h2 {{
-    font-family: -apple-system, ui-sans-serif, system-ui, sans-serif;
-    font-size: 13px;
-    font-weight: 600;
-    color: var(--muted);
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
-    margin: 0 0 12px 0;
-  }}
-  .panel img {{ width: 100%; display: block; }}
-  table {{
-    width: 100%;
-    border-collapse: collapse;
-    font-size: 12px;
-  }}
-  th {{
-    text-align: left;
-    color: var(--muted);
-    font-weight: 500;
-    text-transform: uppercase;
-    font-size: 10px;
-    letter-spacing: 0.05em;
-    padding: 8px 10px;
-    border-bottom: 1px solid var(--border);
-    position: sticky;
-    top: 0;
-    background: var(--panel);
-  }}
-  td {{
-    padding: 7px 10px;
-    border-bottom: 1px solid var(--border);
-    white-space: nowrap;
-  }}
-  td.num {{ text-align: right; font-variant-numeric: tabular-nums; }}
-  tr:hover td {{ background: #151A24; }}
-  .table-wrap {{ max-height: 520px; overflow-y: auto; }}
-  .badge {{
-    padding: 2px 8px;
-    border-radius: 3px;
-    font-size: 10px;
-    font-weight: 600;
-    letter-spacing: 0.03em;
-  }}
-  .badge.long {{ background: rgba(0,217,163,0.15); color: var(--pos); }}
-  .badge.short {{ background: rgba(255,92,92,0.15); color: var(--neg); }}
-  .tag {{
-    color: var(--muted);
-    font-size: 10px;
-    border: 1px solid var(--border);
-    padding: 2px 6px;
-    border-radius: 3px;
-  }}
-  .empty {{ text-align: center; color: var(--muted); padding: 24px; }}
-</style>
-</head>
-<body>
-  <h1>Backtest Report</h1>
-  <div class="subtitle">Generated from {self.total_trades} executed trade(s) &middot; initial balance {initial_balance:,.2f}</div>
-
-  <div class="cards">
-    {summary_cards}
-  </div>
-
-  <div class="panel">
-    <h2>Equity &amp; Balance</h2>
-    <img src="data:image/png;base64,{curve_img}" alt="Equity and balance curve">
-  </div>
-
-  <div class="panel">
-    <h2>Drawdown</h2>
-    <img src="data:image/png;base64,{dd_img}" alt="Drawdown curve">
-  </div>
-
-  <div class="panel">
-    <h2>Trade Ledger</h2>
-    <div class="table-wrap">
-      <table>
-        <thead>
-          <tr>
-            <th>#</th><th>Entry Time</th><th>Exit Time</th><th>Dir</th>
-            <th>Entry</th><th>Exit</th><th>Qty</th><th>Gross PnL</th>
-            <th>Costs</th><th>Net PnL</th><th>Balance</th><th>Exit Reason</th>
-          </tr>
-        </thead>
-        <tbody>
-          {self._ledger_rows_html()}
-        </tbody>
-      </table>
-    </div>
-  </div>
-</body>
-</html>"""
-
-        with open(output_path, 'w') as f:
-            f.write(html)
-
-        return output_path
-
     # Entry point
-    def run(self, html_report_path='backtest_report.html'):
+    def run(self):
         self.prepare()
         results = self.execute()
-        report_path = self.generate_html_report(html_report_path)
-        results['html_report_path'] = report_path
+        
+        strategy_name = self.config.get('strategy_name', 'default_strategy')
+        if self.trade_ledger is not None and not self.trade_ledger.empty:
+            self.trade_ledger = self.trade_ledger.sort_values('entry_time').reset_index(drop=True)
+            results['trade_ledger'] = self.trade_ledger
+            save_ledger(self.trade_ledger, strategy_name)
+            
         return results

@@ -16,15 +16,14 @@ def main():
         # As a fallback, try importing using relative path
         from backtest.backtest import BacktestEngine
 
-    from utils.db import run_cli
-    from utils.config import load_config
+    from utils.db import run_cli, create_backtest_config_table, load_backtest_config
     
     parser = argparse.ArgumentParser(description="Run backtest pipeline")
-    parser.add_argument("--config", "-c", default="backtest/config.yaml", help="config.yaml")
     args = parser.parse_args()
 
-    # Load local backtest config for parameters like initial_balance, position_size, take_profit, stop_loss
-    config = load_config(args.config)
+    # Load backtest config from DB for parameters like initial_balance, position_size, take_profit, stop_loss
+    create_backtest_config_table()
+    config = load_backtest_config()
     
     # Prompt user for CLI inputs
     options = ['strategy', 'exchange', 'symbols', 'start_date', 'end_date']

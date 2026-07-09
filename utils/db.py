@@ -196,13 +196,12 @@ def save_ledger(ledger_df: pd.DataFrame, strategy_name: str) -> None:
         
     engine = get_engine()
     schema = 'backtest_ledgers'
-    table = f"{strategy_name.lower()}_ledger"
+    table = f"{strategy_name.lower()}"
     
     with engine.begin() as conn:
         conn.execute(text(f"CREATE SCHEMA IF NOT EXISTS {schema}"))
         
     # Ensure columns are present and correctly named
-    # The columns match the requested full descriptive names with underscores:
     # entry_time, exit_time, direction, entry_price, exit_price, quantity, gross_pnl, commission, slippage, net_pnl, balance_after_trade
     # as well as exit_reason and forced_exit which are part of the ledger.
     ledger_df.to_sql(
@@ -228,7 +227,7 @@ def save_signals(signal_df: pd.DataFrame, strategy_name: str) -> None:
         
     engine = get_engine()
     schema = 'signal'
-    table = f"{strategy_name.lower()}_signal"
+    table = f"{strategy_name.lower()}"
     
     signal_col = 'signal' if 'signal' in signal_df.columns else signal_df.columns[0]
     df_to_save = signal_df[[signal_col]].copy()
@@ -256,8 +255,8 @@ def create_meta_data_schema() -> None:
         conn.execute(text("CREATE SCHEMA IF NOT EXISTS meta_data"))
         conn.execute(text("""
             CREATE TABLE IF NOT EXISTS meta_data.data_config (
-                exchange          TEXT[]    NOT NULL,
-                symbols           TEXT[]    NOT NULL,
+                exchange          TEXT      NOT NULL,
+                symbols           TEXT      NOT NULL,
                 time_horizons     TEXT[]    NOT NULL,
                 fill_missing_data TEXT[]    NOT NULL,
                 retries           INTEGER[] NOT NULL,
@@ -274,14 +273,17 @@ def create_meta_data_schema() -> None:
             conn.execute(text("""
                 INSERT INTO meta_data.data_config
                     (exchange, symbols, time_horizons, fill_missing_data, retries, retry_delay)
-                VALUES (
-                    ARRAY['binance', 'bybit'],
-                    ARRAY['BTC', 'ETH', 'SOL', 'DOGE', 'ADA', 'LTC', 'MINA', 'SUI'],
+                SELECT 
+                    e.exchange, 
+                    s.symbol, 
                     ARRAY['1m', '5m', '15m', '30m', '1h', '2h', '4h', '6h', '12h', '1d'],
                     ARRAY['interpolation', 'forward_fill', 'backward_fill', 'zero_fill', 'drop'],
                     ARRAY[1, 2, 3, 5, 10],
                     ARRAY[1, 2, 5, 10, 30]
-                )
+                FROM 
+                    UNNEST(ARRAY['binance', 'bybit']) AS e(exchange)
+                CROSS JOIN 
+                    UNNEST(ARRAY['BTC', 'ETH', 'SOL', 'DOGE', 'ADA', 'LTC', 'MINA', 'SUI']) AS s(symbol)
             """))
             print("[v] Inserted default row into meta_data.data_config")
 
@@ -289,15 +291,24 @@ def create_meta_data_schema() -> None:
 
 
 def load_db_config() -> dict:
-    """Fetch the single row from meta_data.data_config and return it as a dict."""
+    """Fetch the config from meta_data.data_config and return it as a dict."""
     engine = get_engine()
 
     with engine.connect() as conn:
         row = conn.execute(
-            text("SELECT * FROM meta_data.data_config LIMIT 1")
+            text("""
+                SELECT 
+                    array_agg(DISTINCT exchange) as exchange,
+                    array_agg(DISTINCT symbols) as symbols,
+                    MAX(time_horizons) as time_horizons,
+                    MAX(fill_missing_data) as fill_missing_data,
+                    MAX(retries) as retries,
+                    MAX(retry_delay) as retry_delay
+                FROM meta_data.data_config
+            """)
         ).mappings().fetchone()
 
-    if row is None:
+    if row is None or row["exchange"] is None:
         raise RuntimeError(
             "meta_data.data_config is empty. "
             "Run create_meta_data_schema() first to seed defaults."
@@ -353,6 +364,70 @@ def seed_strategies() -> None:
             print(f"[v] Seeded {len(strategies)} strategies into meta_data.strategies.")
         except FileNotFoundError:
             print("[!] signals/config.yaml not found, skipping strategy seeding.")
+
+
+def create_backtest_config_table() -> None:
+    """Create and seed the meta_data.backtest_config table if it doesn't exist."""
+    engine = get_engine()
+    with engine.begin() as conn:
+        conn.execute(text("CREATE SCHEMA IF NOT EXISTS meta_data"))
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS meta_data.backtest_config (
+                initial_balance FLOAT DEFAULT 10000,
+                exit_on_opposite_signal BOOLEAN DEFAULT false,
+                position_size JSONB,
+                commission FLOAT DEFAULT 0.0005,
+                slippage FLOAT DEFAULT 0.0002,
+                allow_long BOOLEAN DEFAULT true,
+                allow_short BOOLEAN DEFAULT true,
+                take_profit JSONB,
+                stop_loss JSONB,
+                entry_price JSONB,
+                exit_price JSONB,
+                max_open_positions INTEGER DEFAULT 1
+            )
+        """))
+        
+        row_count = conn.execute(text("SELECT COUNT(*) FROM meta_data.backtest_config")).scalar()
+        if row_count == 0:
+            position_size = {"type": "fixed_percentage", "value": 10}
+            take_profit = {"enabled": True, "type": "percentage", "value": 2.0}
+            stop_loss = {"enabled": True, "type": "percentage", "value": 1.0}
+            entry_price = {"method": "next_open"}
+            exit_price = {"method": "next_open"}
+            
+            conn.execute(text("""
+                INSERT INTO meta_data.backtest_config 
+                (initial_balance, exit_on_opposite_signal, position_size, commission, slippage,
+                 allow_long, allow_short, take_profit, stop_loss, entry_price, exit_price, max_open_positions)
+                VALUES (:initial_balance, :exit_on_opposite_signal, :position_size, :commission, :slippage,
+                        :allow_long, :allow_short, :take_profit, :stop_loss, :entry_price, :exit_price, :max_open_positions)
+            """), {
+                "initial_balance": 10000.0,
+                "exit_on_opposite_signal": False,
+                "position_size": json.dumps(position_size),
+                "commission": 0.0005,
+                "slippage": 0.0002,
+                "allow_long": True,
+                "allow_short": True,
+                "take_profit": json.dumps(take_profit),
+                "stop_loss": json.dumps(stop_loss),
+                "entry_price": json.dumps(entry_price),
+                "exit_price": json.dumps(exit_price),
+                "max_open_positions": 1
+            })
+            print("[v] Seeded meta_data.backtest_config with default values.")
+
+
+def load_backtest_config() -> dict:
+    """Fetch the backtest_config row and return it as a dict."""
+    engine = get_engine()
+    with engine.connect() as conn:
+        row = conn.execute(text("SELECT * FROM meta_data.backtest_config LIMIT 1")).mappings().fetchone()
+    
+    if row:
+        return dict(row)
+    return {}
 
 
 # Styling for the CLI prompts

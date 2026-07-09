@@ -7,9 +7,14 @@ and provides helper functions for querying and inserting candle data.
 import os
 from datetime import datetime
 
+import json
+import yaml
 import pandas as pd
 from dotenv import load_dotenv
 from sqlalchemy import create_engine, text, Column, Float, TIMESTAMP, MetaData, Table
+
+import questionary
+from questionary import Style
 
 
 load_dotenv()  # reads .env from the project root
@@ -277,6 +282,219 @@ def load_db_config() -> dict:
         "retries": list(row["retries"]),
         "retry_delay": list(row["retry_delay"]),
     }
+
+
+def create_strategy_table() -> None:
+    """Create the meta_data.strategies table if it does not exist."""
+    engine = get_engine()
+    with engine.begin() as conn:
+        conn.execute(text("CREATE SCHEMA IF NOT EXISTS meta_data"))
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS meta_data.strategies (
+                id            SERIAL PRIMARY KEY,
+                strategy_name TEXT NOT NULL,
+                config        JSONB NOT NULL
+            )
+        """))
+    print("[v] meta_data.strategies table ensured.")
+
+
+def seed_strategies() -> None:
+    """Read signals/config.yaml and seed the strategies table if empty."""
+    create_strategy_table()
+    engine = get_engine()
+    
+    with engine.begin() as conn:
+        row_count = conn.execute(text("SELECT COUNT(*) FROM meta_data.strategies")).scalar()
+        if row_count > 0:
+            return  # Already seeded
+            
+        try:
+            with open("signals/config.yaml", "r") as f:
+                strategies = yaml.safe_load(f)
+                
+            if not strategies:
+                return
+                
+            for name, cfg in strategies.items():
+                conn.execute(
+                    text("INSERT INTO meta_data.strategies (strategy_name, config) VALUES (:name, :config)"),
+                    {"name": name, "config": json.dumps(cfg)}
+                )
+            print(f"[v] Seeded {len(strategies)} strategies into meta_data.strategies.")
+        except FileNotFoundError:
+            print("[!] signals/config.yaml not found, skipping strategy seeding.")
+
+
+# Styling for the CLI prompts
+_cli_style = Style([
+    ("qmark", "fg:cyan bold"),
+    ("question", "fg:white bold"),
+    ("answer", "fg:green bold"),
+    ("pointer", "fg:cyan bold"),
+    ("highlighted", "fg:cyan bold"),
+    ("selected", "fg:green"),
+])
+
+def run_cli(options: list[str], preset_exchange: str | None = None) -> dict:
+    """
+    Run interactive CLI prompts for the fields specified in `options`.
+    Returns a dict with the selected values.
+    """
+    from datetime import datetime, timezone
+    
+    create_meta_data_schema()
+    db_config = load_db_config()
+    
+    result = {}
+    
+    # --- strategy ---
+    if 'strategy' in options:
+        engine = get_engine()
+        with engine.connect() as conn:
+            rows = conn.execute(text("SELECT id, strategy_name, config FROM meta_data.strategies ORDER BY id")).mappings().fetchall()
+            
+        if not rows:
+            print("[!] No strategies found in DB.")
+            raise KeyboardInterrupt("Prompt cancelled.")
+            
+        choices = [f"{r['id']} - {r['strategy_name']}" for r in rows]
+        strategy_selection = questionary.select(
+            "Select strategy:",
+            choices=choices,
+            style=_cli_style,
+        ).ask()
+        if strategy_selection is None:
+            raise KeyboardInterrupt("Prompt cancelled.")
+            
+        selected_id = int(strategy_selection.split(" - ")[0])
+        selected_row = next(r for r in rows if r['id'] == selected_id)
+        
+        result['strategy_name'] = selected_row['strategy_name']
+        result['strategy_config'] = selected_row['config']
+
+    # --- exchange ---
+    if 'exchange' in options:
+        if preset_exchange:
+            result['exchange'] = preset_exchange
+            print(f"Exchange: {preset_exchange}")
+        else:
+            exch = questionary.select(
+                "Select exchange:",
+                choices=db_config["exchange"],
+                style=_cli_style,
+            ).ask()
+            if exch is None:
+                raise KeyboardInterrupt("Prompt cancelled.")
+            result['exchange'] = exch
+
+    # --- symbols ---
+    if 'symbols' in options:
+        # If 'strategy' is in options, we use single-select (as per user request: calculate for one symbol only)
+        if 'strategy' in options:
+            sym = questionary.select(
+                "Select symbol:",
+                choices=db_config["symbols"],
+                style=_cli_style,
+            ).ask()
+            if sym is None:
+                raise KeyboardInterrupt("Prompt cancelled.")
+            # We return a list with one item so it's compatible or just the string if appropriate.
+            # We'll return the string since the user said "single symbol"
+            result['symbols'] = [sym] # Keep as list for consistency but with one element, wait, user said "only one symbol". Let's use string.
+        else:
+            syms = questionary.checkbox(
+                "Select symbols:",
+                choices=db_config["symbols"],
+                style=_cli_style,
+                validate=lambda sel: len(sel) > 0 or "Select at least one symbol.",
+            ).ask()
+            if syms is None:
+                raise KeyboardInterrupt("Prompt cancelled.")
+            result['symbols'] = syms
+
+    # --- time_horizon ---
+    if 'time_horizon' in options:
+        th = questionary.select(
+            "Select time horizon:",
+            choices=db_config["time_horizons"],
+            style=_cli_style,
+        ).ask()
+        if th is None:
+            raise KeyboardInterrupt("Prompt cancelled.")
+        result['time_horizon'] = th
+
+    # --- fill_missing_data ---
+    if 'fill_missing_data' in options:
+        fmd = questionary.select(
+            "Select fill strategy for missing data:",
+            choices=db_config["fill_missing_data"],
+            style=_cli_style,
+        ).ask()
+        if fmd is None:
+            raise KeyboardInterrupt("Prompt cancelled.")
+        result['fill_missing_data'] = fmd
+
+    # --- retries ---
+    if 'retries' in options:
+        r = questionary.select(
+            "Select number of retries:",
+            choices=[str(x) for x in db_config["retries"]],
+            style=_cli_style,
+        ).ask()
+        if r is None:
+            raise KeyboardInterrupt("Prompt cancelled.")
+        result['retries'] = int(r)
+
+    # --- retry_delay ---
+    if 'retry_delay' in options:
+        rd = questionary.select(
+            "Select retry delay (seconds):",
+            choices=[str(x) for x in db_config["retry_delay"]],
+            style=_cli_style,
+        ).ask()
+        if rd is None:
+            raise KeyboardInterrupt("Prompt cancelled.")
+        result['retry_delay'] = int(rd)
+
+    # --- start_date ---
+    def _validate_date(val: str) -> bool:
+        try:
+            datetime.strptime(val, "%Y-%m-%d")
+            return True
+        except ValueError:
+            return False
+
+    if 'start_date' in options:
+        sd = questionary.text(
+            "Enter start date (YYYY-MM-DD):",
+            validate=lambda val: _validate_date(val) or "Invalid date format. Use YYYY-MM-DD.",
+            style=_cli_style,
+        ).ask()
+        if sd is None:
+            raise KeyboardInterrupt("Prompt cancelled.")
+        result['start_date'] = sd
+
+    # --- end_date ---
+    def _validate_date_or_today(val: str) -> bool:
+        if val.lower() == "today":
+            return True
+        return _validate_date(val)
+
+    if 'end_date' in options:
+        ed = questionary.text(
+            "Enter end date (YYYY-MM-DD or 'today'):",
+            default="today",
+            validate=lambda val: _validate_date_or_today(val) or "Use YYYY-MM-DD or 'today'.",
+            style=_cli_style,
+        ).ask()
+        if ed is None:
+            raise KeyboardInterrupt("Prompt cancelled.")
+        if ed.lower() == "today":
+            ed = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        result['end_date'] = ed
+
+    return result
 
 
 if __name__ == "__main__":

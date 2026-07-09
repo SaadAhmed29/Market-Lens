@@ -1,13 +1,12 @@
 """
 MarketLens - Bybit Main Planner
-Loads the Bybit config and orchestrates the exchange planner.
+Launches the interactive CLI with the exchange pre-set to Bybit.
 """
 
 import logging
 from pathlib import Path
 
-from data.data_downloader import DataFetcher
-from utils.config import load_exchange_config
+from data.cli import prompt_config, run_with_config
 
 # Configure logging for the application
 log_dir = Path(__file__).resolve().parents[2] / "logs"
@@ -25,17 +24,13 @@ logger = logging.getLogger(__name__)
 
 
 def run() -> None:
-    """Main entry point: load config and delegate to the data downloader."""
-    logger.info("Loading Bybit configuration...")
-    config_path = Path(__file__).parent / "config.yml"
-    config = load_exchange_config(config_path)
+    """Main entry point: run interactive CLI with exchange pre-set to bybit."""
+    logger.info("Starting Bybit data pipeline...")
+    config = prompt_config(preset_exchange="bybit")
 
-    logger.info("Initializing Bybit data downloader...")
-    downloader = DataFetcher(config)
-    
     logger.info("Executing Bybit download plan...")
-    downloader.download_all(config["symbols"])
-    
+    run_with_config(config)
+
     logger.info("Bybit main planner finished successfully.")
 
 

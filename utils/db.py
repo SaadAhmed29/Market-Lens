@@ -184,6 +184,101 @@ def create_all_tables() -> None:
     engine.dispose()
     print("[v] Schemas and tables ensured for both exchanges in Market-Lens database.")
 
+def save_ledger(ledger_df: pd.DataFrame, strategy_name: str) -> None:
+    """Save backtest ledger to the backtest_ledgers schema, replacing any existing table."""
+    if ledger_df is None or ledger_df.empty:
+        return
+        
+    engine = get_engine()
+    schema = 'backtest_ledgers'
+    table = f"{strategy_name.lower()}_ledger"
+    
+    with engine.begin() as conn:
+        conn.execute(text(f"CREATE SCHEMA IF NOT EXISTS {schema}"))
+        
+    # Ensure columns are present and correctly named
+    # The columns match the requested full descriptive names with underscores:
+    # entry_time, exit_time, direction, entry_price, exit_price, quantity, gross_pnl, commission, slippage, net_pnl, balance_after_trade
+    # as well as exit_reason and forced_exit which are part of the ledger.
+    ledger_df.to_sql(
+        table,
+        engine,
+        schema=schema,
+        if_exists='replace',
+        index=False
+    )
+    print(f"[v] Saved ledger to {schema}.{table}")
+
+
+def create_meta_data_schema() -> None:
+    """Create the meta_data schema and data_config table with sensible defaults.
+
+    The table stores arrays of allowed options for each config variable.
+    A default row is inserted only if the table is empty (first run).
+    """
+    engine = get_engine()
+
+    with engine.begin() as conn:
+        conn.execute(text("CREATE SCHEMA IF NOT EXISTS meta_data"))
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS meta_data.data_config (
+                exchange          TEXT[]    NOT NULL,
+                symbols           TEXT[]    NOT NULL,
+                time_horizons     TEXT[]    NOT NULL,
+                fill_missing_data TEXT[]    NOT NULL,
+                retries           INTEGER[] NOT NULL,
+                retry_delay       INTEGER[] NOT NULL
+            )
+        """))
+
+        # Insert default row only if table is empty
+        row_count = conn.execute(
+            text("SELECT COUNT(*) FROM meta_data.data_config")
+        ).scalar()
+
+        if row_count == 0:
+            conn.execute(text("""
+                INSERT INTO meta_data.data_config
+                    (exchange, symbols, time_horizons, fill_missing_data, retries, retry_delay)
+                VALUES (
+                    ARRAY['binance', 'bybit'],
+                    ARRAY['BTC', 'ETH', 'SOL', 'DOGE', 'ADA', 'LTC', 'MINA', 'SUI'],
+                    ARRAY['1m', '5m', '15m', '30m', '1h', '2h', '4h', '6h', '12h', '1d'],
+                    ARRAY['interpolation', 'forward_fill', 'backward_fill', 'zero_fill', 'drop'],
+                    ARRAY[1, 2, 3, 5, 10],
+                    ARRAY[1, 2, 5, 10, 30]
+                )
+            """))
+            print("[v] Inserted default row into meta_data.data_config")
+
+    print("[v] meta_data schema and data_config table ensured.")
+
+
+def load_db_config() -> dict:
+    """Fetch the single row from meta_data.data_config and return it as a dict."""
+    engine = get_engine()
+
+    with engine.connect() as conn:
+        row = conn.execute(
+            text("SELECT * FROM meta_data.data_config LIMIT 1")
+        ).mappings().fetchone()
+
+    if row is None:
+        raise RuntimeError(
+            "meta_data.data_config is empty. "
+            "Run create_meta_data_schema() first to seed defaults."
+        )
+
+    return {
+        "exchange": list(row["exchange"]),
+        "symbols": list(row["symbols"]),
+        "time_horizons": list(row["time_horizons"]),
+        "fill_missing_data": list(row["fill_missing_data"]),
+        "retries": list(row["retries"]),
+        "retry_delay": list(row["retry_delay"]),
+    }
+
 
 if __name__ == "__main__":
     create_all_tables()
+

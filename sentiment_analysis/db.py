@@ -8,7 +8,7 @@ import logging
 
 import pandas as pd
 import psycopg2
-from psycopg2.extras import execute_values
+from psycopg2.extras import execute_values, Json
 from sqlalchemy import text
 from utils.db import DB_CONFIG
 from sqlalchemy import text
@@ -121,6 +121,63 @@ def setup_schema():
                 cur.execute(UNIQUE_INDEX_TEMPLATE.format(schema=SCHEMA_NAME, table=table))
 
         log.info("Schema setup complete: %s.raw_data, %s.cleaned_data", SCHEMA_NAME, SCHEMA_NAME)
+    finally:
+        conn.close()
+
+def create_sentiment_config_table():
+    """Create and seed the meta_data.sentiment_config table if it doesn't exist."""
+    conn = get_connection()
+    conn.autocommit = True
+    try:
+        with conn.cursor() as cur:
+            cur.execute("CREATE SCHEMA IF NOT EXISTS meta_data;")
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS meta_data.sentiment_config (
+                    top_n_comments INTEGER DEFAULT 10,
+                    listing_limit INTEGER DEFAULT 10,
+                    symbol_subreddits JSONB,
+                    general_subreddits TEXT[],
+                    symbol_keywords JSONB
+                );
+            """)
+            
+            cur.execute("SELECT COUNT(*) FROM meta_data.sentiment_config;")
+            if cur.fetchone()[0] == 0:
+                symbol_subreddits = {"BTC": ["Bitcoin"], "ETH": ["ethereum"], "SOL": ["solana"], "MINA": ["mina"], "ADA": ["cardano"], "DOGE": ["dogecoin"], "SUI": ["sui"], "LTC": ["litecoin"]}
+                general_subreddits = ["CryptoCurrency", "CryptoMarkets"]
+                symbol_keywords = {"BTC": "bitcoin", "ETH": "ethereum", "SOL": "solana", "MINA": "mina", "ADA": "cardano", "DOGE": "dogecoin", "SUI": "sui", "LTC": "litecoin"}
+                
+                cur.execute("""
+                    INSERT INTO meta_data.sentiment_config 
+                    (top_n_comments, listing_limit, symbol_subreddits, general_subreddits, symbol_keywords)
+                    VALUES (%s, %s, %s, %s, %s)
+                """, (
+                    10, 
+                    10, 
+                    Json(symbol_subreddits), 
+                    general_subreddits, 
+                    Json(symbol_keywords)
+                ))
+                log.info("Seeded meta_data.sentiment_config with default values.")
+    finally:
+        conn.close()
+
+def load_sentiment_config() -> dict:
+    """Fetch the sentiment_config row and return it as a dict."""
+    conn = get_connection()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("SELECT top_n_comments, listing_limit, symbol_subreddits, general_subreddits, symbol_keywords FROM meta_data.sentiment_config LIMIT 1;")
+            row = cur.fetchone()
+            if row:
+                return {
+                    "top_n_comments": row[0],
+                    "listing_limit": row[1],
+                    "symbol_subreddits": row[2],
+                    "general_subreddits": row[3],
+                    "symbol_keywords": row[4]
+                }
+            return {}
     finally:
         conn.close()
 

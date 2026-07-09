@@ -16,40 +16,21 @@ from psycopg2.extras import execute_values, Json
 from dotenv import load_dotenv
 load_dotenv()
 
+from sentiment_analysis.db import get_connection, get_missing_ranges, save_raw_items, create_sentiment_config_table, load_sentiment_config
+
 # Config
 
 SCHEMA_NAME = "sentiment_data"
 TABLE_NAME = "raw_data"
-TOP_N_COMMENTS = 10
-LISTING_LIMIT = 10  # Reddit's practical ceiling per listing/search query
 
-# symbol -> list of subreddits to search
-SYMBOL_SUBREDDITS = {
-    "BTC": ["Bitcoin"],
-    "ETH": ["ethereum"],
-    "SOL": ["solana"],
-    "MINA": ["mina"],
-    "ADA": ["cardano"],
-    "DOGE": ["dogecoin"],
-    "SUI": ["sui"],
-    "LTC": ["litecoin"],
-}
+create_sentiment_config_table()
+sentiment_config = load_sentiment_config()
 
-# also search these general subreddits for keyword mentions of each symbol
-GENERAL_SUBREDDITS = ["CryptoCurrency", "CryptoMarkets"]
-
-# keyword used for general-subreddit search per symbol (full name works
-# better than the raw ticker, since tickers like SOL/ADA are common words)
-SYMBOL_KEYWORDS = {
-    "BTC": "bitcoin",
-    "ETH": "ethereum",
-    "SOL": "solana",
-    "MINA": "mina",
-    "ADA": "cardano",
-    "DOGE": "dogecoin",
-    "SUI": "sui",
-    "LTC": "litecoin",
-}
+TOP_N_COMMENTS = sentiment_config.get("top_n_comments", 10)
+LISTING_LIMIT = sentiment_config.get("listing_limit", 10)
+SYMBOL_SUBREDDITS = sentiment_config.get("symbol_subreddits", {})
+GENERAL_SUBREDDITS = sentiment_config.get("general_subreddits", [])
+SYMBOL_KEYWORDS = sentiment_config.get("symbol_keywords", {})
 
 
 def _parse_date(date_str, default=None):
@@ -79,9 +60,6 @@ def get_reddit_client():
         client_secret=os.getenv("client_secret"),
         user_agent=os.getenv("user_agent"),
     )
-
-
-from sentiment_analysis.db import get_connection, get_missing_ranges, save_raw_items
 
 
 # Fetch helpers

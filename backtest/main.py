@@ -1,5 +1,6 @@
 import argparse
 import sys
+import json
 from pathlib import Path
 
 def _ensure_import_path():
@@ -16,19 +17,26 @@ def main():
         # As a fallback, try importing using relative path
         from backtest.backtest import BacktestEngine
 
-    from utils.db import run_cli, create_backtest_config_table, load_backtest_config
-    
+    from utils.db import run_cli, create_backtest_config_table, load_backtest_config, get_engine
+    from sqlalchemy import text
+
     parser = argparse.ArgumentParser(description="Run backtest pipeline")
     args = parser.parse_args()
 
-    # Load backtest config from DB for parameters like initial_balance, position_size, take_profit, stop_loss
-    create_backtest_config_table()
-    config = load_backtest_config()
-    
-    # Prompt user for CLI inputs
+    # Prompt user for CLI inputs first, since we now need the strategy name
+    # to look up which backtest_config row to use
     options = ['strategy', 'exchange', 'symbols', 'start_date', 'end_date']
     cli_config = run_cli(options)
-    
+
+    # Load backtest config from DB for parameters like initial_balance, position_size, take_profit, stop_loss
+    create_backtest_config_table()
+    all_configs = load_backtest_config()
+
+    # Resolve the strategy_id matching the given strategy name, then pick that row's config
+    config = all_configs.get(cli_config.get('strategy_id'), {})
+    if isinstance(config, str):
+        config = json.loads(config)
+
     # Merge CLI config into the main config
     config.update(cli_config)
     
@@ -49,4 +57,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

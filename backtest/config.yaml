@@ -9,8 +9,8 @@ position_size:
   type: fixed_percentage      # fixed_percentage
   value: 10                   # 10% of current balance
 
-commission: 0.0005            # 0.05% per trade
-slippage: 0.0002              # 0.02% execution slippage
+commission: 0.05            # 0.05% per trade
+slippage: 0.02              # 0.02% execution slippage
 
 allow_long: true
 allow_short: true

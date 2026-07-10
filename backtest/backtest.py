@@ -355,10 +355,10 @@ class BacktestEngine:
             entry_value = entry_price[i] * qty
             exit_value = exit_price[i] * qty
 
-            entry_comm = entry_value * commission_rate
-            exit_comm = exit_value * commission_rate
-            entry_slip = entry_value * slippage_rate
-            exit_slip = exit_value * slippage_rate
+            entry_comm = entry_value * commission_rate / 100
+            exit_comm = exit_value * commission_rate / 100
+            entry_slip = entry_value * slippage_rate / 100
+            exit_slip = exit_value * slippage_rate / 100
 
             entry_commissions[i] = entry_comm
             exit_commissions[i] = exit_comm

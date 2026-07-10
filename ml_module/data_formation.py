@@ -1,5 +1,5 @@
 import pandas as pd
-from utils.ml_utils import merge_ohlcv_indicators, fetch_sentiment_data, map_sentiment_to_ohlcv
+from utils.ml_utils import merge_ohlcv_indicators, fetch_sentiment_data, map_sentiment_to_ohlcv, build_target
 from utils.db import get_engine
 from data.data_downloader import DataFetcher
 from indicators.talib_indicators import TalibIndicators
@@ -80,5 +80,8 @@ def build_dataset(config: dict) -> pd.DataFrame:
         engine = get_engine()
         sentiment_df = fetch_sentiment_data(start_date, end_date, engine)
         final_df = map_sentiment_to_ohlcv(final_df, sentiment_df, alias)
+
+    # Target
+    final_df = build_target(final_df, config)
 
     return final_df

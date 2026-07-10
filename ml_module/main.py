@@ -10,8 +10,9 @@ def main():
     print(df.head())
 
     # save df to csv with date as index
-    df.to_csv("dataset.csv", index=True)
-    print("Dataset saved to dataset.csv")
+    model = config.get("model_type")
+    df.to_csv(f"{model}_dataset.csv", index=True)
+    print(f"{model} dataset saved to {model}_dataset.csv")
 
 if __name__ == "__main__":
     main()

@@ -63,3 +63,68 @@ def map_sentiment_to_ohlcv(ohlcv_df: pd.DataFrame, sentiment_df: pd.DataFrame, a
     
     return merged
 
+
+def calculate_future_direction(df: pd.DataFrame, source: str, horizon: int, classes: dict) -> pd.Series:
+    """Computes a binary classification target based on future price direction.
+
+    Shifts the source column back by horizon steps to obtain the future price,
+    then assigns classes['positive'] where future > current, else classes['negative'].
+    Returns a Series named 'target'.
+    """
+    current_price = df[source]
+    future_price = df[source].shift(-horizon)
+    target = pd.Series(
+        classes['negative'],
+        index=df.index,
+        name='target',
+        dtype=object
+    )
+    target = target.where(future_price <= current_price, other=classes['positive'])
+    target[future_price.isna()] = pd.NA
+    return target.astype("Float64")
+
+
+def calculate_future_return(df: pd.DataFrame, source: str, horizon: int) -> pd.Series:
+    """Computes the percentage return between the current and future price.
+
+    future_return = (future_price - current_price) / current_price * 100
+    Returns a Series named 'target'.
+    """
+    current_price = df[source]
+    future_price = df[source].shift(-horizon)
+    return ((future_price - current_price) / current_price * 100).rename('target')
+
+
+def build_target(df: pd.DataFrame, config: dict) -> pd.DataFrame:
+    """Builds and appends the target column based on model_type in config.
+
+    Reads model_type and target config, dispatches to the correct helper,
+    appends a 'target' column, and drops the last `horizon` rows that have
+    NaN targets due to the forward shift.
+    """
+    model_type = config.get('model_type', 'regression')
+    target_blocks = config.get('target', {})
+
+    if model_type not in target_blocks:
+        raise ValueError(f"No target config found for model_type='{model_type}'.")
+
+    target_cfg = target_blocks[model_type][0]
+    source = target_cfg['source']
+    horizon = target_cfg['horizon']
+    method = target_cfg['method']
+
+    if method == 'future_direction':
+        classes = target_cfg.get('classes', {'positive': 1, 'negative': 0})
+        target_series = calculate_future_direction(df, source, horizon, classes)
+    elif method == 'future_return':
+        target_series = calculate_future_return(df, source, horizon)
+    else:
+        raise ValueError(f"Unknown target method: '{method}'.")
+
+    df = df.copy()
+    df['target'] = target_series
+
+    # Drop the last `horizon` rows — they have NaN targets due to the shift
+    df = df.iloc[:-horizon]
+
+    return df

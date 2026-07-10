@@ -56,5 +56,15 @@ features:
       sentiment: sen_MARKET
 
 target:
-  source: close
-  horizon: 1
+  classification:
+    - source: close
+      method: future_direction
+      horizon: 5
+      classes:
+        positive: 1
+        negative: 0
+
+  regression:
+    - source: close
+      method: future_return
+      horizon: 5

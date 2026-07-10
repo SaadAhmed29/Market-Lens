@@ -1,5 +1,6 @@
 import pandas as pd
-from utils.ml_utils import merge_ohlcv_indicators
+from utils.ml_utils import merge_ohlcv_indicators, fetch_sentiment_data, map_sentiment_to_ohlcv
+from utils.db import get_engine
 from data.data_downloader import DataFetcher
 from indicators.talib_indicators import TalibIndicators
 
@@ -66,7 +67,18 @@ def build_dataset(config: dict) -> pd.DataFrame:
     new_cols = [c for c in combined_ind.columns if c not in ohlcv_df.columns]
     indicator_df = combined_ind[new_cols]
     
-    # Combine
+    # Combine OHLCV + indicators
     final_df = merge_ohlcv_indicators(ohlcv_df, indicator_df)
-    
+
+    # Sentiment
+    sentiment_cfg = features_cfg.get('sentiment', {})
+    if sentiment_cfg.get('enabled', False):
+        start_date = data_cfg['start_date']
+        end_date = data_cfg['end_date']
+        alias = list(sentiment_cfg.get('aliases', {}).values())[0]
+
+        engine = get_engine()
+        sentiment_df = fetch_sentiment_data(start_date, end_date, engine)
+        final_df = map_sentiment_to_ohlcv(final_df, sentiment_df, alias)
+
     return final_df

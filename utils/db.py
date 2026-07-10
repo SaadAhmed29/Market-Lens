@@ -16,7 +16,6 @@ from sqlalchemy import create_engine, text, Column, Float, TIMESTAMP, MetaData, 
 import questionary
 from questionary import Style
 
-
 load_dotenv()  # reads .env from the project root
 
 DB_CONFIG = {
@@ -244,84 +243,103 @@ def save_signals(signal_df: pd.DataFrame, strategy_name: str) -> None:
     print(f"[v] Saved signals to {schema}.{table}")
 
 def create_meta_data_schema() -> None:
-    """Create the meta_data schema and data_config table with sensible defaults.
-
-    The table stores arrays of allowed options for each config variable.
-    A default row is inserted only if the table is empty (first run).
+    """Create the meta_data schema and new data_config table.
+    
+    Drops any existing data_config table and creates it with the new schema,
+    seeding it with 1m timeframes for all symbols across both exchanges.
     """
     engine = get_engine()
 
     with engine.begin() as conn:
         conn.execute(text("CREATE SCHEMA IF NOT EXISTS meta_data"))
+        conn.execute(text("DROP TABLE IF EXISTS meta_data.data_config CASCADE"))
+        
         conn.execute(text("""
-            CREATE TABLE IF NOT EXISTS meta_data.data_config (
-                exchange          TEXT      NOT NULL,
-                symbols           TEXT      NOT NULL,
-                time_horizons     TEXT[]    NOT NULL,
-                fill_missing_data TEXT[]    NOT NULL,
-                retries           INTEGER[] NOT NULL,
-                retry_delay       INTEGER[] NOT NULL
+            CREATE TABLE meta_data.data_config (
+                id            SERIAL PRIMARY KEY,
+                exchange      TEXT NOT NULL,
+                symbol        TEXT NOT NULL,
+                time_horizon  TEXT NOT NULL,
+                records_count INTEGER DEFAULT 0,
+                start_date    TIMESTAMP,
+                end_date      TIMESTAMP,
+                UNIQUE (exchange, symbol, time_horizon)
             )
         """))
 
-        # Insert default row only if table is empty
-        row_count = conn.execute(
-            text("SELECT COUNT(*) FROM meta_data.data_config")
-        ).scalar()
+        # Seed with 1m combinations for 8 symbols across both exchanges (16 rows)
+        from datetime import datetime, timezone
+        today = datetime.now(timezone.utc)
+        start_dt = datetime(2025, 1, 1, tzinfo=timezone.utc)
+        
+        conn.execute(text("""
+            INSERT INTO meta_data.data_config
+                (exchange, symbol, time_horizon, start_date, end_date)
+            SELECT 
+                e.exchange, 
+                s.symbol, 
+                '1m',
+                :start_dt,
+                :end_dt
+            FROM 
+                UNNEST(ARRAY['binance', 'bybit']) AS e(exchange)
+            CROSS JOIN 
+                UNNEST(ARRAY['BTC', 'ETH', 'SOL', 'DOGE', 'ADA', 'LTC', 'MINA', 'SUI']) AS s(symbol)
+            ON CONFLICT DO NOTHING
+        """), {"start_dt": start_dt, "end_dt": today})
 
-        if row_count == 0:
-            conn.execute(text("""
-                INSERT INTO meta_data.data_config
-                    (exchange, symbols, time_horizons, fill_missing_data, retries, retry_delay)
-                SELECT 
-                    e.exchange, 
-                    s.symbol, 
-                    ARRAY['1m', '5m', '15m', '30m', '1h', '2h', '4h', '6h', '12h', '1d'],
-                    ARRAY['interpolation', 'forward_fill', 'backward_fill', 'zero_fill', 'drop'],
-                    ARRAY[1, 2, 3, 5, 10],
-                    ARRAY[1, 2, 5, 10, 30]
-                FROM 
-                    UNNEST(ARRAY['binance', 'bybit']) AS e(exchange)
-                CROSS JOIN 
-                    UNNEST(ARRAY['BTC', 'ETH', 'SOL', 'DOGE', 'ADA', 'LTC', 'MINA', 'SUI']) AS s(symbol)
-            """))
-            print("[v] Inserted default row into meta_data.data_config")
-
-    print("[v] meta_data schema and data_config table ensured.")
+    print("[v] meta_data schema and data_config table ensured with new schema.")
 
 
-def load_db_config() -> dict:
-    """Fetch the config from meta_data.data_config and return it as a dict."""
+def load_data_config(exchange: str) -> list[dict]:
+    """Fetch all rows for the given exchange from data_config and return as list of dicts."""
     engine = get_engine()
 
     with engine.connect() as conn:
-        row = conn.execute(
+        rows = conn.execute(
             text("""
-                SELECT 
-                    array_agg(DISTINCT exchange) as exchange,
-                    array_agg(DISTINCT symbols) as symbols,
-                    MAX(time_horizons) as time_horizons,
-                    MAX(fill_missing_data) as fill_missing_data,
-                    MAX(retries) as retries,
-                    MAX(retry_delay) as retry_delay
+                SELECT symbol, time_horizon, start_date, end_date, records_count
                 FROM meta_data.data_config
-            """)
-        ).mappings().fetchone()
+                WHERE exchange = :exchange
+            """),
+            {"exchange": exchange}
+        ).mappings().fetchall()
 
-    if row is None or row["exchange"] is None:
-        raise RuntimeError(
-            "meta_data.data_config is empty. "
-            "Run create_meta_data_schema() first to seed defaults."
+    return [dict(row) for row in rows]
+
+def update_data_config_dates(exchange: str, symbol: str, time_horizon: str, start_date, end_date) -> None:
+    """Updates the start_date, end_date, and records_count for a matching row."""
+    engine = get_engine()
+    
+    # Calculate records count dynamically based on the actual table
+    bare_tbl = get_table_name(symbol, time_horizon)
+    tbl_name = f"{exchange}_data.{bare_tbl}"
+    
+    with engine.begin() as conn:
+        try:
+            count = conn.execute(text(f"SELECT COUNT(*) FROM {tbl_name}")).scalar()
+        except Exception:
+            count = 0
+            
+        conn.execute(
+            text("""
+                UPDATE meta_data.data_config
+                SET start_date = :start_date,
+                    end_date = :end_date,
+                    records_count = :count
+                WHERE exchange = :exchange
+                  AND symbol = :symbol
+                  AND time_horizon = :time_horizon
+            """),
+            {
+                "start_date": start_date,
+                "end_date": end_date,
+                "count": count,
+                "exchange": exchange,
+                "symbol": symbol,
+                "time_horizon": time_horizon
+            }
         )
-
-    return {
-        "exchange": list(row["exchange"]),
-        "symbols": list(row["symbols"]),
-        "time_horizons": list(row["time_horizons"]),
-        "fill_missing_data": list(row["fill_missing_data"]),
-        "retries": list(row["retries"]),
-        "retry_delay": list(row["retry_delay"]),
-    }
 
 
 def create_strategy_table() -> None:
@@ -373,72 +391,93 @@ def create_backtest_config_table() -> None:
         conn.execute(text("CREATE SCHEMA IF NOT EXISTS meta_data"))
         conn.execute(text("""
             CREATE TABLE IF NOT EXISTS meta_data.backtest_config (
-                initial_balance FLOAT DEFAULT 10000,
-                exit_on_opposite_signal BOOLEAN DEFAULT false,
-                position_size JSONB,
-                commission FLOAT DEFAULT 0.0005,
-                slippage FLOAT DEFAULT 0.0002,
-                allow_long BOOLEAN DEFAULT true,
-                allow_short BOOLEAN DEFAULT true,
-                take_profit JSONB,
-                stop_loss JSONB,
-                entry_price JSONB,
-                exit_price JSONB,
-                max_open_positions INTEGER DEFAULT 1
+                strategy_id INTEGER PRIMARY KEY REFERENCES meta_data.strategies(id),
+                config JSONB
             )
         """))
-        
+
         row_count = conn.execute(text("SELECT COUNT(*) FROM meta_data.backtest_config")).scalar()
         if row_count == 0:
-            position_size = {"type": "fixed_percentage", "value": 10}
-            take_profit = {"enabled": True, "type": "percentage", "value": 2.0}
-            stop_loss = {"enabled": True, "type": "percentage", "value": 1.0}
-            entry_price = {"method": "next_open"}
-            exit_price = {"method": "next_open"}
-            
-            conn.execute(text("""
-                INSERT INTO meta_data.backtest_config 
-                (initial_balance, exit_on_opposite_signal, position_size, commission, slippage,
-                 allow_long, allow_short, take_profit, stop_loss, entry_price, exit_price, max_open_positions)
-                VALUES (:initial_balance, :exit_on_opposite_signal, :position_size, :commission, :slippage,
-                        :allow_long, :allow_short, :take_profit, :stop_loss, :entry_price, :exit_price, :max_open_positions)
-            """), {
+            default_config = {
                 "initial_balance": 10000.0,
                 "exit_on_opposite_signal": False,
-                "position_size": json.dumps(position_size),
+                "position_size": {"type": "fixed_percentage", "value": 10},
                 "commission": 0.0005,
                 "slippage": 0.0002,
                 "allow_long": True,
                 "allow_short": True,
-                "take_profit": json.dumps(take_profit),
-                "stop_loss": json.dumps(stop_loss),
-                "entry_price": json.dumps(entry_price),
-                "exit_price": json.dumps(exit_price),
+                "take_profit": {"enabled": True, "type": "percentage", "value": 2.0},
+                "stop_loss": {"enabled": True, "type": "percentage", "value": 1.0},
+                "entry_price": {"method": "next_open"},
+                "exit_price": {"method": "next_open"},
                 "max_open_positions": 1
-            })
+            }
+
+            strategy_ids = conn.execute(text("SELECT id FROM meta_data.strategies")).scalars().all()
+
+            for strategy_id in strategy_ids:
+                conn.execute(text("""
+                    INSERT INTO meta_data.backtest_config (strategy_id, config)
+                    VALUES (:strategy_id, :config)
+                """), {
+                    "strategy_id": strategy_id,
+                    "config": json.dumps(default_config)
+                })
             print("[v] Seeded meta_data.backtest_config with default values.")
 
 
 def load_backtest_config() -> dict:
-    """Fetch the backtest_config row and return it as a dict."""
+    """Fetch all backtest_config rows and return them as a dict keyed by strategy_id."""
     engine = get_engine()
     with engine.connect() as conn:
-        row = conn.execute(text("SELECT * FROM meta_data.backtest_config LIMIT 1")).mappings().fetchone()
-    
-    if row:
-        return dict(row)
-    return {}
+        rows = conn.execute(text("SELECT strategy_id, config FROM meta_data.backtest_config")).mappings().fetchall()
 
+    config = {}
+    for row in rows:
+        config[row["strategy_id"]] = row["config"]
+    return config
 
-# Styling for the CLI prompts
 _cli_style = Style([
-    ("qmark", "fg:cyan bold"),
-    ("question", "fg:white bold"),
-    ("answer", "fg:green bold"),
-    ("pointer", "fg:cyan bold"),
-    ("highlighted", "fg:cyan bold"),
-    ("selected", "fg:green"),
+    ('qmark', 'fg:#673ab7 bold'),
+    ('question', 'bold'),
+    ('answer', 'fg:#f44336 bold'),
+    ('pointer', 'fg:#673ab7 bold'),
+    ('highlighted', 'fg:#673ab7 bold'),
+    ('selected', 'fg:#cc5454'),
 ])
+
+def load_db_config() -> dict:
+    """Fetch the config from meta_data.data_config and return it as a dict.
+    Provides fallback defaults for CLI options no longer in the DB.
+    """
+    engine = get_engine()
+
+    with engine.connect() as conn:
+        row = conn.execute(
+            text("""
+                SELECT 
+                    array_agg(DISTINCT exchange) as exchange,
+                    array_agg(DISTINCT symbol) as symbols,
+                    array_agg(DISTINCT time_horizon) as time_horizons
+                FROM meta_data.data_config
+            """)
+        ).mappings().fetchone()
+
+    if row is None or not row["exchange"]:
+        raise RuntimeError(
+            "meta_data.data_config is empty. "
+            "Run create_meta_data_schema() first to seed defaults."
+        )
+
+    return {
+        "exchange": list(row["exchange"]),
+        "symbols": list(row["symbols"]),
+        "time_horizons": list(row["time_horizons"]),
+        "fill_missing_data": ['interpolation', 'forward_fill', 'backward_fill', 'zero_fill', 'drop'],
+        "retries": [1, 2, 3, 5, 10],
+        "retry_delay": [1, 2, 5, 10, 30],
+    }
+
 
 def run_cli(options: list[str], preset_exchange: str | None = None) -> dict:
     """
@@ -447,7 +486,6 @@ def run_cli(options: list[str], preset_exchange: str | None = None) -> dict:
     """
     from datetime import datetime, timezone
     
-    create_meta_data_schema()
     db_config = load_db_config()
     
     result = {}
@@ -476,6 +514,7 @@ def run_cli(options: list[str], preset_exchange: str | None = None) -> dict:
         
         result['strategy_name'] = selected_row['strategy_name']
         result['strategy_config'] = selected_row['config']
+        result['strategy_id'] = selected_row['id']
 
     # --- exchange ---
     if 'exchange' in options:
@@ -503,9 +542,7 @@ def run_cli(options: list[str], preset_exchange: str | None = None) -> dict:
             ).ask()
             if sym is None:
                 raise KeyboardInterrupt("Prompt cancelled.")
-            # We return a list with one item so it's compatible or just the string if appropriate.
-            # We'll return the string since the user said "single symbol"
-            result['symbols'] = [sym] # Keep as list for consistency but with one element, wait, user said "only one symbol". Let's use string.
+            result['symbols'] = [sym] # Keep as list for consistency but with one element
         else:
             syms = questionary.checkbox(
                 "Select symbols:",
@@ -599,6 +636,8 @@ def run_cli(options: list[str], preset_exchange: str | None = None) -> dict:
         result['end_date'] = ed
 
     return result
+
+
 
 
 if __name__ == "__main__":

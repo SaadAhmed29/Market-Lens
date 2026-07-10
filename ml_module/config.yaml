@@ -1,0 +1,60 @@
+model_type: regression # regression | classification | timeseries
+
+data:
+  enabled: true
+  symbol: BTC
+  exchange: binance
+  timeframe: 15m
+  start_date: "2026-01-01"
+  end_date: "2026-06-01"
+
+features:
+  enabled: true
+
+  indicators:
+    EMA:
+      - parameters:
+          timeperiod: 20
+        aliases:
+          ema: ind_EMA_20
+
+      - parameters:
+          timeperiod: 50
+        aliases:
+          ema: ind_EMA_50
+
+    RSI:
+      - parameters:
+          timeperiod: 14
+        aliases:
+          rsi: ind_RSI_14
+
+    MACD:
+      - parameters:
+          fastperiod: 12
+          slowperiod: 26
+          signalperiod: 9
+        aliases:
+          macd: ind_MACD_12_26_9
+          macd_signal: ind_MACD_SIGNAL_12_26_9
+          macd_hist: ind_MACD_HIST_12_26_9
+
+    PATTERNS:
+      DOJI:
+        aliases:
+          pattern: pat_DOJI
+
+      ENGULFING:
+        aliases:
+          pattern: pat_BULLISH_ENGULFING
+
+  sentiment:
+    enabled: true
+    source:
+      - reddit
+    aliases:
+      sentiment: sen_MARKET
+
+target:
+  source: close
+  horizon: 1

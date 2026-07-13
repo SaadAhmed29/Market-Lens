@@ -46,7 +46,7 @@ def map_sentiment_to_ohlcv(ohlcv_df: pd.DataFrame, sentiment_df: pd.DataFrame, a
         temp_ohlcv,
         sentiment_df[['date_time', alias]],
         on='date_time',
-        direction='nearest'
+        direction='backward'
     )
     
     merged.set_index('date_time', inplace=True)
@@ -118,6 +118,8 @@ def build_target(df: pd.DataFrame, config: dict) -> pd.DataFrame:
         target_series = calculate_future_direction(df, source, horizon, classes)
     elif method == 'future_return':
         target_series = calculate_future_return(df, source, horizon)
+    elif method == 'next_close':
+        target_series = df[source].shift(-horizon)
     else:
         raise ValueError(f"Unknown target method: '{method}'.")
 

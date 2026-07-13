@@ -1,9 +1,9 @@
-from ml_module.data_formation import build_dataset
-from utils.ml_utils import load_ml_config
+from ml.data_formation import build_dataset
+from ml.data_utils import load_ml_config
 
 
 def main():
-    config_path = "ml_module/config.yaml"
+    config_path = "ml/config.yaml"
     config = load_ml_config(config_path)
     df = build_dataset(config)
 

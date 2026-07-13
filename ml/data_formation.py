@@ -1,5 +1,5 @@
 import pandas as pd
-from utils.ml_utils import merge_ohlcv_indicators, fetch_sentiment_data, map_sentiment_to_ohlcv, build_target
+from ml.data_utils import merge_ohlcv_indicators, fetch_sentiment_data, map_sentiment_to_ohlcv, build_target
 from utils.db import get_engine
 from data.data_downloader import DataFetcher
 from indicators.talib_indicators import TalibIndicators
@@ -10,31 +10,31 @@ def build_dataset(config: dict) -> pd.DataFrame:
     data_cfg = config.get('data', {})
     features_cfg = config.get('features', {})
     
-    # OHLCV Data
-    ohlcv_df = None
-    if data_cfg.get('enabled', False):
-        # Fetch the 1m raw data from the DB first
-        raw_df, _ = DataFetcher.get_updated_df(
-            exchange=data_cfg['exchange'],
-            symbol=data_cfg['symbol'],
-            start=data_cfg['start_date'],
-            end=data_cfg['end_date'],
-            time_frame="1m"
-        )
-        
-        # Resample it to the timeframe specified in config (e.g., 1h)
-        ohlcv_df, _ = DataFetcher.get_resampled_df(raw_df, data_cfg['timeframe'])
-        
-        if ohlcv_df is None or ohlcv_df.empty:
-            print("Warning: OHLCV DataFrame is empty.")
-            return pd.DataFrame()
-    else:
-        print("Data fetching is disabled in config.")
+    # OHLCV Data — always fetched so indicators can be computed.
+    # When data.enabled=False the raw OHLCV columns are dropped from the final output.
+    include_ohlcv = data_cfg.get('enabled', False)
+
+    raw_df, _ = DataFetcher.get_updated_df(
+        exchange=data_cfg['exchange'],
+        symbol=data_cfg['symbol'],
+        start=data_cfg['start_date'],
+        end=data_cfg['end_date'],
+        time_frame="1m"
+    )
+
+    # Resample it to the timeframe specified in config (e.g., 15m, 1h)
+    ohlcv_df, _ = DataFetcher.get_resampled_df(raw_df, data_cfg['timeframe'])
+
+    if ohlcv_df is None or ohlcv_df.empty:
+        print("Warning: OHLCV DataFrame is empty.")
         return pd.DataFrame()
 
     # Indicators
     if not features_cfg.get('enabled', False) or 'indicators' not in features_cfg:
+        if not include_ohlcv:
+            return pd.DataFrame()
         return ohlcv_df
+
 
     # Prepare talib config and indicator list according to the TalibIndicators format
     talib_config = {}
@@ -81,7 +81,12 @@ def build_dataset(config: dict) -> pd.DataFrame:
         sentiment_df = fetch_sentiment_data(start_date, end_date, engine)
         final_df = map_sentiment_to_ohlcv(final_df, sentiment_df, alias)
 
-    # Target
+    # Target — must run before OHLCV columns are dropped (source column e.g. 'close' is still needed)
     final_df = build_target(final_df, config)
+
+    # Drop raw OHLCV columns from output when data.enabled=False
+    if not include_ohlcv:
+        ohlcv_cols = ['open', 'high', 'low', 'close', 'volume']
+        final_df = final_df.drop(columns=[c for c in ohlcv_cols if c in final_df.columns])
 
     return final_df

@@ -1,7 +1,7 @@
-model_type: regression # regression | classification | timeseries
+model_type: classification # regression | classification | timeseries
 
 data:
-  enabled: true
+  enabled: false
   symbol: BTC
   exchange: binance
   timeframe: 15m
@@ -68,3 +68,8 @@ target:
     - source: close
       method: future_return
       horizon: 5
+  
+  timeseries:
+    - source: close
+      method: next_close
+      horizon: 1

@@ -27,6 +27,9 @@ logs/
 # Testing
 testing/
 
+# Backtest Results
+backtest_results/
+
 # CSV files
 *.csv
 

@@ -60,6 +60,13 @@ def raw_baseline(df: pd.DataFrame) -> pd.DataFrame:
 def log_returns_rolling_zscore(df: pd.DataFrame) -> pd.DataFrame:
     """Convert price columns to log returns, then apply rolling z-score.
 
+    Columns that contain zero or negative values (e.g. oscillators like
+    RSI/MACD, or binary pattern flags) can't take a meaningful log return
+    — dividing by/into zero or a negative value produces -inf/inf/NaN,
+    which then contaminates the whole frame via the rolling window and
+    the final dropna(). For those columns, fall back to a plain rolling
+    z-score of the raw values instead.
+
     Config params (defaults):
         window (int): Rolling window size for the z-score.  Default 20.
     """
@@ -70,13 +77,22 @@ def log_returns_rolling_zscore(df: pd.DataFrame) -> pd.DataFrame:
     cols = _feature_cols(df)
 
     for col in cols:
+        series = df[col]
+
+        if (series <= 0).any():
+            # Not eligible for log returns — plain rolling z-score instead.
+            roll_mean = series.rolling(window=window, min_periods=1).mean()
+            roll_std = series.rolling(window=window, min_periods=1).std()
+            roll_std = roll_std.replace(0, np.nan)
+            df[col] = (series - roll_mean) / roll_std
+            continue
+
         # Log returns: ln(x_t / x_{t-1})
-        log_ret = np.log(df[col] / df[col].shift(1))
+        log_ret = np.log(series / series.shift(1))
 
         # Rolling z-score
         roll_mean = log_ret.rolling(window=window, min_periods=1).mean()
         roll_std = log_ret.rolling(window=window, min_periods=1).std()
-        # Avoid division by zero — replace 0 std with NaN then forward-fill
         roll_std = roll_std.replace(0, np.nan)
 
         df[col] = (log_ret - roll_mean) / roll_std

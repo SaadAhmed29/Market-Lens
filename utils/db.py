@@ -479,10 +479,17 @@ def load_db_config() -> dict:
     }
 
 
-def run_cli(options: list[str], preset_exchange: str | None = None) -> dict:
+def run_cli(options: list[str], preset_exchange: str | None = None,
+            multi_select_options: list[dict] | None = None) -> dict:
     """
     Run interactive CLI prompts for the fields specified in `options`.
     Returns a dict with the selected values.
+
+    Parameters
+    ----------
+    multi_select_options : list[dict], optional
+        Each dict must have ``key`` (result key), ``prompt`` (question text),
+        and ``choices`` (list of strings).  Presented as checkbox prompts.
     """
     from datetime import datetime, timezone
     
@@ -634,6 +641,19 @@ def run_cli(options: list[str], preset_exchange: str | None = None) -> dict:
         if ed.lower() == "today":
             ed = datetime.now(timezone.utc).strftime("%Y-%m-%d")
         result['end_date'] = ed
+
+    # --- multi_select ---
+    if multi_select_options:
+        for ms in multi_select_options:
+            selections = questionary.checkbox(
+                ms["prompt"],
+                choices=ms["choices"],
+                style=_cli_style,
+                validate=lambda sel: len(sel) > 0 or "Select at least one option.",
+            ).ask()
+            if selections is None:
+                raise KeyboardInterrupt("Prompt cancelled.")
+            result[ms["key"]] = selections
 
     return result
 

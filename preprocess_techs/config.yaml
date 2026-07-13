@@ -18,3 +18,13 @@ stationarity_analysis:
 trend_preservation:
   - name: long_term_trend_retention
   - name: local_trend_retention
+
+models:
+  classification:
+    - name: lightgbm
+    - name: svm
+    - name: logistic_regression
+  regression:
+    - name: lightgbm
+    - name: svm
+    - name: linear_regression

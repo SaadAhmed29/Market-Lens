@@ -64,23 +64,30 @@ def map_sentiment_to_ohlcv(ohlcv_df: pd.DataFrame, sentiment_df: pd.DataFrame, a
     return merged
 
 
-def calculate_future_direction(df: pd.DataFrame, source: str, horizon: int, classes: dict) -> pd.Series:
-    """Computes a binary classification target based on future price direction.
+def calculate_future_direction(df: pd.DataFrame, source: str, horizon: int, classes: dict, threshold: float = 0.5) -> pd.Series:
+    """Computes a 3-class classification target based on future price direction.
 
     Shifts the source column back by horizon steps to obtain the future price,
-    then assigns classes['positive'] where future > current, else classes['negative'].
+    then assigns:
+        classes['positive'] (1)  if future_return > +threshold%
+        classes['negative'] (-1) if future_return < -threshold%
+        classes['neutral']  (0)  if within threshold range (do nothing)
     Returns a Series named 'target'.
     """
     current_price = df[source]
     future_price = df[source].shift(-horizon)
+    future_return = (future_price - current_price) / current_price * 100
+
     target = pd.Series(
-        classes['negative'],
+        classes.get('neutral', 0),
         index=df.index,
         name='target',
         dtype=object
     )
-    target = target.where(future_price <= current_price, other=classes['positive'])
+    target = target.where(future_return <= threshold, other=classes.get('positive', 1))
+    target = target.where(future_return >= -threshold, other=classes.get('negative', -1))
     target[future_price.isna()] = pd.NA
+
     return target.astype("Float64")
 
 
@@ -93,6 +100,15 @@ def calculate_future_return(df: pd.DataFrame, source: str, horizon: int) -> pd.S
     current_price = df[source]
     future_price = df[source].shift(-horizon)
     return ((future_price - current_price) / current_price * 100).rename('target')
+
+
+def calculate_next_close(df: pd.DataFrame, source: str, horizon: int) -> pd.Series:
+    """Computes the next close price as a regression target.
+
+    Shifts the source column back by horizon steps to obtain the future price.
+    Returns a Series named 'target'.
+    """
+    return df[source].shift(-horizon).rename('target')
 
 
 def build_target(df: pd.DataFrame, config: dict) -> pd.DataFrame:
@@ -114,12 +130,13 @@ def build_target(df: pd.DataFrame, config: dict) -> pd.DataFrame:
     method = target_cfg['method']
 
     if method == 'future_direction':
-        classes = target_cfg.get('classes', {'positive': 1, 'negative': 0})
-        target_series = calculate_future_direction(df, source, horizon, classes)
+        classes = target_cfg.get('classes', {'positive': 1, 'neutral': 0, 'negative': -1})
+        threshold = target_cfg.get('threshold', 0.5)
+        target_series = calculate_future_direction(df, source, horizon, classes, threshold)
     elif method == 'future_return':
         target_series = calculate_future_return(df, source, horizon)
     elif method == 'next_close':
-        target_series = df[source].shift(-horizon)
+        target_series = calculate_next_close(df, source, horizon)
     else:
         raise ValueError(f"Unknown target method: '{method}'.")
 

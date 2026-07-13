@@ -1,7 +1,7 @@
 model_type: classification # regression | classification | timeseries
 
 data:
-  enabled: false
+  enabled: true
   symbol: BTC
   exchange: binance
   timeframe: 15m
@@ -60,6 +60,7 @@ target:
     - source: close
       method: future_direction
       horizon: 5
+      threshold: 0.25
       classes:
         positive: 1
         negative: 0

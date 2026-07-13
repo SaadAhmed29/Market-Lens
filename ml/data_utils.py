@@ -1,5 +1,6 @@
 import yaml
 import pandas as pd
+import numpy as np
 
 def load_ml_config(config_path: str) -> dict:
     """Load and return the ML config YAML as a dict."""
@@ -78,16 +79,23 @@ def calculate_future_direction(df: pd.DataFrame, source: str, horizon: int, clas
     future_price = df[source].shift(-horizon)
     future_return = (future_price - current_price) / current_price * 100
 
+    conditions = [
+        future_return > threshold,
+        future_return < -threshold,
+    ]
+    choices = [
+        classes.get('positive', 1),
+        classes.get('negative', -1),
+    ]
+
     target = pd.Series(
-        classes.get('neutral', 0),
+        np.select(conditions, choices, default=classes.get('neutral', 0)),
         index=df.index,
         name='target',
         dtype=object
     )
-    target = target.where(future_return <= threshold, other=classes.get('positive', 1))
-    target = target.where(future_return >= -threshold, other=classes.get('negative', -1))
-    target[future_price.isna()] = pd.NA
 
+    target[future_price.isna()] = pd.NA
     return target.astype("Float64")
 
 

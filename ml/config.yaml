@@ -63,7 +63,8 @@ target:
       threshold: 0.25
       classes:
         positive: 1
-        negative: 0
+        negative: -1
+        neutral: 0
 
   regression:
     - source: close

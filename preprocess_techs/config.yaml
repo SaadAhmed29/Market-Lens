@@ -1,6 +1,6 @@
-train_start_date: "2026-01-01"
-train_end_date: "2026-04-30"
-val_start_date: "2026-05-01"
+train_start_date: "2025-01-01"
+train_end_date: "2025-12-31"
+val_start_date: "2026-01-01"
 val_end_date: "2026-05-31"
 
 techniques:

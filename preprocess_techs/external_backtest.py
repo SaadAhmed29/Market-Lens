@@ -1,29 +1,16 @@
 """
-backtest_from_predictions.py
-
 Runs a backtest using externally-supplied model predictions (e.g. the
 predictions_df produced by preprocess_techs/runner.py) instead of letting
 BacktestEngine compute signals from a strategy config.
-
-Nothing in backtest_engine.py is modified. This module reuses
-BacktestEngine as-is, and mirrors what BacktestEngine.prepare()/run() do
-internally, just swapping out the load_signals() step (strategy -> model
-predictions).
 """
 
 import os
-
 import pandas as pd
-
 from backtest.backtest import BacktestEngine
-from utils.db import save_ledger
 
 
-def _predictions_to_signal_df(
-    predictions_df: pd.DataFrame,
-    prediction_col: str = "predictions",
-    label_to_signal: dict = None,
-) -> pd.DataFrame:
+def _predictions_to_signal_df(predictions_df: pd.DataFrame, prediction_col: str = "predictions",
+                              label_to_signal: dict = None,) -> pd.DataFrame:
     """
     Convert a predictions DataFrame (indexed by date_time, as produced by
     preprocess_techs/runner.py) into the signal_df format
@@ -46,16 +33,10 @@ def _predictions_to_signal_df(
     return signal_df
 
 
-def run_backtest_from_predictions(
-    config: dict,
-    predictions_df: pd.DataFrame,
-    technique_name: str,
-    model_name: str,
-    prediction_col: str = "predictions",
-    label_to_signal: dict = None,
-    persist_signals: bool = False,
-    output_dir: str = "backtest_results",
-) -> dict:
+def run_backtest_from_predictions(config: dict, predictions_df: pd.DataFrame, technique_name: str,
+                                  model_name: str, prediction_col: str = "predictions",
+                                  label_to_signal: dict = None, persist_signals: bool = False, 
+                                  output_dir: str = "backtest_results") -> dict:
     """
     Run a backtest using model-predicted signals instead of a
     strategy-computed signal_df, then save the trade ledger to a CSV
@@ -90,10 +71,10 @@ def run_backtest_from_predictions(
     """
     engine = BacktestEngine(config)
 
-    # 1. Load OHLCV data -- still needed for trade execution / TP-SL scanning.
+    # Load OHLCV data, still needed for trade execution / TP-SL scanning.
     engine.load_data()
 
-    # 2. Build signal_df from predictions instead of engine.load_signals().
+    # Build signal_df from predictions instead of engine.load_signals().
     engine.signal_df = _predictions_to_signal_df(
         predictions_df, prediction_col=prediction_col, label_to_signal=label_to_signal
     )
@@ -103,24 +84,23 @@ def run_backtest_from_predictions(
         strategy_name = config.get("strategy_name", "model_predictions")
         save_signals(engine.signal_df, strategy_name)
 
-    # 3. Map signals onto the 1m timeline and build trades -- same steps
-    #    BacktestEngine.prepare() runs after load_signals().
+    # Map signals onto the 1m timeline and build trades -- same steps
+    # BacktestEngine.prepare() runs after load_signals().
     if engine.signal_df is not None and not engine.signal_df.empty:
         engine._map_signals_to_1m()
         if not engine.mapped_signals.empty:
             engine._build_trades()
 
-    # 4. Execute (sizing, commission/slippage, PnL, equity curve) -- same
-    #    as BacktestEngine.run() would do.
+    # Execute (sizing, commission/slippage, PnL, equity curve) -- same
+    # as BacktestEngine.run() would do.
     results = engine.execute()
 
     strategy_name = config.get("strategy_name", "model_predictions")
     if engine.trade_ledger is not None and not engine.trade_ledger.empty:
         engine.trade_ledger = engine.trade_ledger.sort_values("entry_time").reset_index(drop=True)
         results["trade_ledger"] = engine.trade_ledger
-        save_ledger(engine.trade_ledger, strategy_name)
 
-    # 5. Save the trade ledger to CSV, named after the technique + model.
+    # Save the trade ledger to CSV, named after the technique + model.
     os.makedirs(output_dir, exist_ok=True)
     csv_path = os.path.join(output_dir, f"backtest_{technique_name}_{model_name}.csv")
 

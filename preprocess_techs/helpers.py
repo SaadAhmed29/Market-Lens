@@ -6,17 +6,12 @@ and trend preservation methods.
 import os
 import numpy as np
 import pandas as pd
-import yaml
 from statsmodels.tsa.stattools import adfuller, kpss as kpss_test, acf
+from utils.config import load_config
+from preprocess_techs.data_utils import print_table
 
 
 _CONFIG_PATH = os.path.join(os.path.dirname(__file__), "config.yaml")
-
-
-def _load_config() -> dict:
-    """Load the preprocess_techs config YAML."""
-    with open(_CONFIG_PATH, "r") as f:
-        return yaml.safe_load(f)
 
 
 def _get_technique_params(technique_name: str) -> dict:
@@ -26,7 +21,7 @@ def _get_technique_params(technique_name: str) -> dict:
     'trend_preservation' sections of the config for a matching name.
     Returns an empty dict when the technique has no extra params.
     """
-    cfg = _load_config()
+    cfg = load_config(_CONFIG_PATH)
     for section in ("techniques", "stationarity_analysis", "trend_preservation"):
         entries = cfg.get(section, [])
         if entries is None:
@@ -38,15 +33,14 @@ def _get_technique_params(technique_name: str) -> dict:
     return {}
 
 
+EXCLUDE_COLS = {"date_time", "target", "sen_MARKET"}
 
-_EXCLUDE_COLS = {"date_time", "target"}
 
-
-def _feature_cols(df: pd.DataFrame) -> list[str]:
+def feature_cols(df: pd.DataFrame) -> list[str]:
     """Return numeric columns excluding date_time and target."""
     return [
         c for c in df.select_dtypes(include=[np.number]).columns
-        if c not in _EXCLUDE_COLS
+        if c not in EXCLUDE_COLS
     ]
 
 
@@ -74,7 +68,7 @@ def log_returns_rolling_zscore(df: pd.DataFrame) -> pd.DataFrame:
     window: int = params.get("window", 20)
 
     df = df.copy()
-    cols = _feature_cols(df)
+    cols = feature_cols(df)
 
     for col in cols:
         series = df[col]
@@ -111,7 +105,7 @@ def volatility_scaled(df: pd.DataFrame) -> pd.DataFrame:
     window: int = params.get("window", 20)
 
     df = df.copy()
-    cols = _feature_cols(df)
+    cols = feature_cols(df)
 
     for col in cols:
         roll_std = df[col].rolling(window=window, min_periods=1).std()
@@ -136,7 +130,7 @@ def winsorized_robust(df: pd.DataFrame) -> pd.DataFrame:
     upper_pct: float = params.get("upper_percentile", 99.0)
 
     df = df.copy()
-    cols = _feature_cols(df)
+    cols = feature_cols(df)
 
     for col in cols:
         lower_bound = np.nanpercentile(df[col], lower_pct)
@@ -167,7 +161,7 @@ def rolling_rank_transform(df: pd.DataFrame) -> pd.DataFrame:
     window: int = params.get("window", 20)
 
     df = df.copy()
-    cols = _feature_cols(df)
+    cols = feature_cols(df)
 
     for col in cols:
         series = df[col]
@@ -196,7 +190,7 @@ def adf(df: pd.DataFrame) -> pd.DataFrame:
     params = _get_technique_params("adf")
     sig_level: float = params.get("significance_level", 0.05)
 
-    cols = _feature_cols(df)
+    cols = feature_cols(df)
     records: list[dict] = []
 
     for col in cols:
@@ -234,7 +228,7 @@ def kpss(df: pd.DataFrame) -> pd.DataFrame:
     sig_level: float = params.get("significance_level", 0.05)
     regression: str = params.get("regression", "c")
 
-    cols = _feature_cols(df)
+    cols = feature_cols(df)
     records: list[dict] = []
 
     for col in cols:
@@ -272,7 +266,7 @@ def autocorrelation(df: pd.DataFrame) -> pd.DataFrame:
     params = _get_technique_params("autocorrelation")
     nlags: int = params.get("nlags", 20)
 
-    cols = _feature_cols(df)
+    cols = feature_cols(df)
     records: list[dict] = []
 
     for col in cols:
@@ -310,7 +304,7 @@ def long_term_trend_retention(df: pd.DataFrame) -> pd.DataFrame:
     slow_window: int = params.get("slow_window", 100)
     corr_threshold: float = params.get("correlation_threshold", 0.7)
 
-    cols = _feature_cols(df)
+    cols = feature_cols(df)
     records: list[dict] = []
 
     for col in cols:
@@ -354,7 +348,7 @@ def local_trend_retention(df: pd.DataFrame) -> pd.DataFrame:
     fast_window: int = params.get("fast_window", 10)
     corr_threshold: float = params.get("correlation_threshold", 0.7)
 
-    cols = _feature_cols(df)
+    cols = feature_cols(df)
     records: list[dict] = []
 
     for col in cols:
@@ -380,3 +374,28 @@ def local_trend_retention(df: pd.DataFrame) -> pd.DataFrame:
         })
 
     return pd.DataFrame(records)
+
+
+# Runner Functions
+
+def run_stationarity(train_df: pd.DataFrame, methods: list[str]) -> None:
+    for method_name in methods:
+        func = globals()[method_name]
+        summary = func(train_df)
+        print_table(f"Stationarity — {method_name.upper()}", summary)
+
+
+def run_trend_preservation(train_df: pd.DataFrame, methods: list[str]) -> None:
+    for method_name in methods:
+        func = globals()[method_name]
+        summary = func(train_df)
+        # Normalise the result column for display
+        if "result" in summary.columns:
+            summary["trend_retained"] = summary["result"].apply(
+                lambda r: "Yes" if r == "Preserved" else "No"
+            )
+            display_cols = ["column", "trend_retained"]
+            extra = [c for c in summary.columns if c not in ("column", "result", "trend_retained")]
+            display_cols = ["column"] + extra + ["trend_retained"]
+            summary = summary[display_cols]
+        print_table(f"Trend Preservation — {method_name}", summary)

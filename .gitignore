@@ -30,6 +30,9 @@ testing/
 # Backtest Results
 backtest_results/
 
+# Preprocessed Datasets
+preprocessed_datasets/
+
 # CSV files
 *.csv
 

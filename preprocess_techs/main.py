@@ -15,7 +15,7 @@ from ml.data_utils import load_ml_config
 from utils.config import load_config
 from preprocess_techs.external_backtest import run_backtest_from_predictions
 from preprocess_techs.model_utils import train_and_evaluate, split_train_val
-from preprocess_techs.helpers import run_stationarity, run_trend_preservation
+from preprocess_techs.helpers import run_stationarity, run_trend_preservation, fractional_differencing
 from preprocess_techs.data_utils import prompt_user, print_table, apply_preprocessing
 
 
@@ -68,12 +68,6 @@ def main() -> None:
     train_df, val_df = apply_preprocessing(technique, train_df, val_df)
     print(f"[v] After preprocessing — Train: {train_df.shape}  |  Val: {val_df.shape}")
 
-    # Save preprocessed dataset (train + val) to CSV
-    os.makedirs("preprocessed_datasets", exist_ok=True)
-    preprocessed_csv_path = os.path.join("preprocessed_datasets", f"dataset_{technique}.csv")
-    pd.concat([train_df, val_df]).to_csv(preprocessed_csv_path)
-    print(f"[v] Preprocessed dataset saved to: {preprocessed_csv_path}")
-
     # Stationarity analysis (on train set)
     if stationarity_methods:
         run_stationarity(train_df, stationarity_methods)
@@ -81,6 +75,22 @@ def main() -> None:
     # Trend preservation (on train set)
     if trend_methods:
         run_trend_preservation(train_df, trend_methods)
+
+    # Fractional differencing
+    print("\n[*] Applying fractional differencing …")
+    train_df = fractional_differencing(train_df)
+    val_df = fractional_differencing(val_df)
+    print(f"[v] After fractional differencing — Train: {train_df.shape}  |  Val: {val_df.shape}")
+
+    # Stationarity analysis again (post fractional differencing)
+    if stationarity_methods:
+        run_stationarity(train_df, stationarity_methods)
+
+    # Save preprocessed dataset (train + val) to CSV
+    os.makedirs("preprocessed_datasets", exist_ok=True)
+    preprocessed_csv_path = os.path.join("preprocessed_datasets", f"dataset_{technique}_{model_type}.csv")
+    pd.concat([train_df, val_df]).to_csv(preprocessed_csv_path)
+    print(f"[v] Preprocessed dataset saved to: {preprocessed_csv_path}")
 
     # Model training & evaluation
     print(f"\n[*] Training {model_name} ({model_type}) …")

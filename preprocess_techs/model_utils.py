@@ -46,8 +46,15 @@ def get_model(model_name: str, model_type: str):
     raise ValueError(f"Unknown model: {model_name}")
 
 
-def train_and_evaluate(model_name: str, model_type: str, train_df: pd.DataFrame, val_df: pd.DataFrame) -> tuple[object, pd.DataFrame]:
-    """Train model, evaluate, return (fitted model, predictions_df)."""
+def train_and_evaluate(model_name: str, model_type: str, train_df: pd.DataFrame, val_df: pd.DataFrame, regression_signal_threshold: float = 0.25) -> tuple[object, pd.DataFrame]:
+    """Train model, evaluate, return (fitted model, predictions_df).
+
+    For regression models, the continuous output is additionally
+    converted into a -1/0/1 signal (based on regression_signal_threshold)
+    before being placed into predictions_df, since downstream consumers
+    (e.g. the backtest) expect discrete signals rather than raw
+    regression output.
+    """
 
     feat_cols = helpers.feature_cols(train_df)
 
@@ -83,9 +90,18 @@ def train_and_evaluate(model_name: str, model_type: str, train_df: pd.DataFrame,
         print(f"  RMSE : {rmse:.4f}")
     print()
 
+    # Convert regression output into a -1/0/1 signal based on threshold
+    if not is_classifier:
+        signal_preds = np.where(
+            preds > regression_signal_threshold, 1,
+            np.where(preds < -regression_signal_threshold, -1, 0)
+        )
+    else:
+        signal_preds = preds
+
     # Build predictions df
     predictions_df = pd.DataFrame(
-        {"predictions": preds},
+        {"predictions": signal_preds},
         index=val_df.index,
     )
     predictions_df.index.name = "date_time"

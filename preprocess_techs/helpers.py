@@ -116,37 +116,40 @@ def volatility_scaled(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-def winsorized_robust(df: pd.DataFrame) -> pd.DataFrame:
-    """Clip outliers at percentile bounds then apply robust scaling.
+# Winsorized Robust (fit on train, apply on val)
 
-    Robust scaling: (x - median) / IQR
-
-    Config params (defaults):
-        lower_percentile (float): Lower clip bound.  Default 1.0.
-        upper_percentile (float): Upper clip bound.  Default 99.0.
-    """
+def winsorized_robust(train_df: pd.DataFrame, val_df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Fit winsorized_robust on train, apply the same stats to val."""
     params = _get_technique_params("winsorized_robust")
     lower_pct: float = params.get("lower_percentile", 1.0)
     upper_pct: float = params.get("upper_percentile", 99.0)
 
-    df = df.copy()
-    cols = feature_cols(df)
+    train_out = train_df.copy()
+    val_out = val_df.copy()
 
-    for col in cols:
-        lower_bound = np.nanpercentile(df[col], lower_pct)
-        upper_bound = np.nanpercentile(df[col], upper_pct)
-        clipped = df[col].clip(lower=lower_bound, upper=upper_bound)
+    feat_cols = feature_cols(train_df)
 
-        median = clipped.median()
-        q1 = clipped.quantile(0.25)
-        q3 = clipped.quantile(0.75)
+    for col in feat_cols:
+        # Compute bounds on train
+        lower_bound = np.nanpercentile(train_df[col], lower_pct)
+        upper_bound = np.nanpercentile(train_df[col], upper_pct)
+
+        # Clip both
+        train_clipped = train_out[col].clip(lower=lower_bound, upper=upper_bound)
+        val_clipped = val_out[col].clip(lower=lower_bound, upper=upper_bound)
+
+        # Compute median / IQR on train clipped
+        median = train_clipped.median()
+        q1 = train_clipped.quantile(0.25)
+        q3 = train_clipped.quantile(0.75)
         iqr = q3 - q1
         if iqr == 0:
-            iqr = 1.0  # Prevent division by zero
+            iqr = 1.0
 
-        df[col] = (clipped - median) / iqr
+        train_out[col] = (train_clipped - median) / iqr
+        val_out[col] = (val_clipped - median) / iqr
 
-    return df
+    return train_out, val_out
 
 
 def rolling_rank_transform(df: pd.DataFrame) -> pd.DataFrame:
@@ -174,6 +177,129 @@ def rolling_rank_transform(df: pd.DataFrame) -> pd.DataFrame:
 
     df.dropna(inplace=True)
     return df
+
+
+# Sklearn-based Scalers (fit on train, apply on val)
+
+def standard_scaler(train_df: pd.DataFrame, val_df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Standardize features by removing the mean and scaling to unit variance.
+
+    (x - mean) / std, computed on train and applied to both.
+    """
+    from sklearn.preprocessing import StandardScaler
+
+    train_out = train_df.copy()
+    val_out = val_df.copy()
+    cols = feature_cols(train_df)
+
+    scaler = StandardScaler()
+    train_out[cols] = scaler.fit_transform(train_df[cols])
+    val_out[cols] = scaler.transform(val_df[cols])
+
+    return train_out, val_out
+
+
+def minmax_scaler(train_df: pd.DataFrame, val_df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Scale features to a fixed [feature_range] interval (default [0, 1]).
+
+    Config params (defaults):
+        feature_min (float): Lower bound of output range.  Default 0.0.
+        feature_max (float): Upper bound of output range.  Default 1.0.
+    """
+    from sklearn.preprocessing import MinMaxScaler
+
+    params = _get_technique_params("minmax_scaler")
+    feature_min: float = params.get("feature_min", 0.0)
+    feature_max: float = params.get("feature_max", 1.0)
+
+    train_out = train_df.copy()
+    val_out = val_df.copy()
+    cols = feature_cols(train_df)
+
+    scaler = MinMaxScaler(feature_range=(feature_min, feature_max))
+    train_out[cols] = scaler.fit_transform(train_df[cols])
+    val_out[cols] = scaler.transform(val_df[cols])
+
+    return train_out, val_out
+
+
+def robust_scaler(train_df: pd.DataFrame, val_df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Scale features using statistics robust to outliers: (x - median) / IQR.
+
+    Config params (defaults):
+        quantile_min (float): Lower quantile for IQR.  Default 25.0.
+        quantile_max (float): Upper quantile for IQR.  Default 75.0.
+    """
+    from sklearn.preprocessing import RobustScaler
+
+    params = _get_technique_params("robust_scaler")
+    quantile_min: float = params.get("quantile_min", 25.0)
+    quantile_max: float = params.get("quantile_max", 75.0)
+
+    train_out = train_df.copy()
+    val_out = val_df.copy()
+    cols = feature_cols(train_df)
+
+    scaler = RobustScaler(quantile_range=(quantile_min, quantile_max))
+    train_out[cols] = scaler.fit_transform(train_df[cols])
+    val_out[cols] = scaler.transform(val_df[cols])
+
+    return train_out, val_out
+
+
+def maxabs_scaler(train_df: pd.DataFrame, val_df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Scale each feature by its maximum absolute value, into [-1, 1].
+
+    Preserves sparsity/sign — does not center the data, so it's a good
+    fit for already-signed features (e.g. MACD, returns).
+    """
+    from sklearn.preprocessing import MaxAbsScaler
+
+    train_out = train_df.copy()
+    val_out = val_df.copy()
+    cols = feature_cols(train_df)
+
+    scaler = MaxAbsScaler()
+    train_out[cols] = scaler.fit_transform(train_df[cols])
+    val_out[cols] = scaler.transform(val_df[cols])
+
+    return train_out, val_out
+
+
+def quantile_transformer(train_df: pd.DataFrame, val_df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Map features to a uniform (or normal) distribution using quantiles.
+
+    Non-linear — this can spread out the most frequent values and
+    reduces the impact of outliers, at the cost of distorting linear
+    relationships between features that were previously correlated.
+
+    Config params (defaults):
+        n_quantiles (int): Number of quantiles to compute.  Default 1000
+            (automatically capped at the train set size if smaller).
+        output_distribution (str): 'uniform' or 'normal'.  Default 'uniform'.
+    """
+    from sklearn.preprocessing import QuantileTransformer as SkQuantileTransformer
+
+    params = _get_technique_params("quantile_transformer")
+    n_quantiles: int = params.get("n_quantiles", 1000)
+    output_distribution: str = params.get("output_distribution", "uniform")
+
+    train_out = train_df.copy()
+    val_out = val_df.copy()
+    cols = feature_cols(train_df)
+
+    # n_quantiles can't exceed the number of train samples
+    effective_n_quantiles = min(n_quantiles, len(train_df))
+
+    scaler = SkQuantileTransformer(
+        n_quantiles=effective_n_quantiles,
+        output_distribution=output_distribution,
+        random_state=42,
+    )
+    train_out[cols] = scaler.fit_transform(train_df[cols])
+    val_out[cols] = scaler.transform(val_df[cols])
+
+    return train_out, val_out
 
 
 # Stationarity Analysis
@@ -298,11 +424,11 @@ def long_term_trend_retention(df: pd.DataFrame) -> pd.DataFrame:
     Config params (defaults):
         slow_window (int): Window for the slow rolling mean.  Default 100.
         correlation_threshold (float): Minimum acceptable correlation.
-            Default 0.7.
+            Default 0.5.
     """
     params = _get_technique_params("long_term_trend_retention")
     slow_window: int = params.get("slow_window", 100)
-    corr_threshold: float = params.get("correlation_threshold", 0.7)
+    corr_threshold: float = params.get("correlation_threshold", 0.5)
 
     cols = feature_cols(df)
     records: list[dict] = []
@@ -342,11 +468,11 @@ def local_trend_retention(df: pd.DataFrame) -> pd.DataFrame:
     Config params (defaults):
         fast_window (int): Window for the fast rolling mean.  Default 10.
         correlation_threshold (float): Minimum acceptable correlation.
-            Default 0.7.
+            Default 0.5.
     """
     params = _get_technique_params("local_trend_retention")
     fast_window: int = params.get("fast_window", 10)
-    corr_threshold: float = params.get("correlation_threshold", 0.7)
+    corr_threshold: float = params.get("correlation_threshold", 0.5)
 
     cols = feature_cols(df)
     records: list[dict] = []

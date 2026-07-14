@@ -15,41 +15,6 @@ def split_train_val(df: pd.DataFrame, train_start: str, train_end: str, val_star
     val_df = df.loc[val_start:val_end].copy()
     return train_df, val_df
 
-# Winsorized Robust (fit on train, apply on val)
-
-def winsorized_robust_fit_transform(train_df: pd.DataFrame, val_df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
-    """Fit winsorized_robust on train, apply the same stats to val."""
-    params = helpers._get_technique_params("winsorized_robust")
-    lower_pct: float = params.get("lower_percentile", 1.0)
-    upper_pct: float = params.get("upper_percentile", 99.0)
-
-    train_out = train_df.copy()
-    val_out = val_df.copy()
-
-    feature_cols = helpers.feature_cols(train_df)
-
-    for col in feature_cols:
-        # Compute bounds on train
-        lower_bound = np.nanpercentile(train_df[col], lower_pct)
-        upper_bound = np.nanpercentile(train_df[col], upper_pct)
-
-        # Clip both
-        train_clipped = train_out[col].clip(lower=lower_bound, upper=upper_bound)
-        val_clipped = val_out[col].clip(lower=lower_bound, upper=upper_bound)
-
-        # Compute median / IQR on train clipped
-        median = train_clipped.median()
-        q1 = train_clipped.quantile(0.25)
-        q3 = train_clipped.quantile(0.75)
-        iqr = q3 - q1
-        if iqr == 0:
-            iqr = 1.0
-
-        train_out[col] = (train_clipped - median) / iqr
-        val_out[col] = (val_clipped - median) / iqr
-
-    return train_out, val_out
-
 
 # Model training & evaluation
 

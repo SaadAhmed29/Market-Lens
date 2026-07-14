@@ -9,6 +9,17 @@ techniques:
   - name: volatility_scaled
   - name: winsorized_robust
   - name: rolling_rank_transform
+  - name: standard_scaler
+  - name: minmax_scaler
+    feature_min: 0.0
+    feature_max: 1.0
+  - name: robust_scaler
+    quantile_min: 25.0
+    quantile_max: 75.0
+  - name: maxabs_scaler
+  - name: quantile_transformer
+    n_quantiles: 1000
+    output_distribution: uniform
 
 stationarity_analysis:
   - name: adf

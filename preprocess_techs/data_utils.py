@@ -6,6 +6,12 @@ import pandas as pd
 from utils.db import run_cli
 from preprocess_techs import helpers
 
+
+FIT_TRANSFORM_TECHNIQUES = {
+    "winsorized_robust", "standard_scaler", "minmax_scaler",
+    "robust_scaler", "maxabs_scaler", "quantile_transformer",
+}
+
 # CLI
 
 def prompt_user(pp_cfg: dict) -> dict:
@@ -94,9 +100,8 @@ def apply_preprocessing(technique_name: str, train_df: pd.DataFrame, val_df: pd.
     """
     func = getattr(helpers, technique_name)
 
-    if technique_name == "winsorized_robust":
-        from preprocess_techs.model_utils import winsorized_robust_fit_transform
-        train_out, val_out = winsorized_robust_fit_transform(train_df, val_df)
+    if technique_name in FIT_TRANSFORM_TECHNIQUES:
+        train_out, val_out = func(train_df, val_df)
     else:
         train_out = func(train_df)
         val_out = func(val_df)

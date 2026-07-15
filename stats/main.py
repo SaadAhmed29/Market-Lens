@@ -35,8 +35,12 @@ def generate_stats(results, strategy_name='strategy'):
     # Get the directory of this file
     base_dir = os.path.dirname(os.path.abspath(__file__))
     output_dir = os.path.join(base_dir, 'output')
-    os.makedirs(output_dir, exist_ok=True)
     
+    import shutil
+    if os.path.exists(output_dir):
+        shutil.rmtree(output_dir, ignore_errors=True)
+    os.makedirs(output_dir, exist_ok=True)
+
     # Convert ledger to daily returns
     returns = ledger_to_returns(ledger_df)
     

@@ -27,10 +27,12 @@ def ledger_to_returns(ledger_df: pd.DataFrame) -> pd.Series:
     end_date = df['date'].max()
     date_range = pd.date_range(start=start_date, end=end_date, freq='D')
     
-    daily_balance = daily_balance.reindex(date_range).ffill()
+    daily_balance = daily_balance.reindex(date_range)
     
     # Calculate daily percentage returns
     returns = daily_balance.pct_change()
+
+    returns = returns.fillna(0)
     
     # For the first day, calculate return relative to the initial balance
     returns.iloc[0] = (daily_balance.iloc[0] - initial_balance) / initial_balance

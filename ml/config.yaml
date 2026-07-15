@@ -1,4 +1,4 @@
-model_type: regression # regression | classification | timeseries
+model_type: classification # regression | classification | timeseries
 
 data:
   enabled: true
@@ -60,7 +60,7 @@ target:
     - source: close
       method: future_direction
       horizon: 5
-      threshold: 0.25
+      threshold: 0.30
       classes:
         positive: 1
         negative: -1

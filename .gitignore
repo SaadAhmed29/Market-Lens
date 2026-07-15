@@ -38,3 +38,6 @@ preprocessed_datasets/
 
 # HTML files
 *.html
+
+# Stats Output
+stats/output/

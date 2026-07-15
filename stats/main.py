@@ -15,16 +15,16 @@ except ImportError:
     from .metrics import calculate_metrics
     from .plots import generate_plots
 
-def generate_stats(results, strategy_name='strategy'):
+def generate_stats(bt_ledger, strategy_name='strategy'):
     """
     Accepts the return from BacktestEngine's run() method or a trade ledger DataFrame,
     calculates metrics and plots, and saves them to stats/output/.
     """
     # Accept either the results dict from BacktestEngine or the ledger df directly
-    if isinstance(results, dict) and 'trade_ledger' in results:
-        ledger_df = results['trade_ledger']
-    elif isinstance(results, pd.DataFrame):
-        ledger_df = results
+    if isinstance(bt_ledger, dict) and 'trade_ledger' in bt_ledger:
+        ledger_df = bt_ledger['trade_ledger']
+    elif isinstance(bt_ledger, pd.DataFrame):
+        ledger_df = bt_ledger
     else:
         raise ValueError("Expected results dict from BacktestEngine or trade ledger DataFrame")
         

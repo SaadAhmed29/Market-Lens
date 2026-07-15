@@ -18,12 +18,10 @@ def generate_plots(returns: pd.Series, output_dir: str):
     
     try:
         qs.plots.returns(returns, savefig=os.path.join(output_dir, 'returns.png'), show=False)
+        qs.plots.log_returns(returns, savefig=os.path.join(output_dir, 'log_returns.png'), show=False)
         qs.plots.drawdown(returns, savefig=os.path.join(output_dir, 'drawdown.png'), show=False)
-        qs.plots.rolling_sharpe(returns, period=30, savefig=os.path.join(output_dir, 'rolling_sharpe.png'), show=False)
-        qs.plots.rolling_volatility(returns, period=30, savefig=os.path.join(output_dir, 'rolling_volatility.png'), show=False)
         qs.plots.monthly_heatmap(returns, savefig=os.path.join(output_dir, 'monthly_returns_heatmap.png'), show=False)
         qs.plots.yearly_returns(returns, savefig=os.path.join(output_dir, 'yearly_returns.png'), show=False)
-        qs.plots.histogram(returns, savefig=os.path.join(output_dir, 'distribution_of_returns.png'), show=False)
     except Exception as e:
         print(f"Warning: Failed to generate some plots: {e}")
     finally:

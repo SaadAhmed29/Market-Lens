@@ -41,3 +41,8 @@ preprocessed_datasets/
 
 # Stats Output
 stats/output/
+
+# ML Artifacts (models, scalers, etc)
+ml/artifacts/
+ml/models/
+ml/metrics/

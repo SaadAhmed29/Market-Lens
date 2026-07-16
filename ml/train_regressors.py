@@ -15,7 +15,8 @@ from ml.regressors.svr import SVRModel
 def main():
     config_path = "ml/config.yaml"
     config = load_ml_config(config_path)
-    
+    config['model_type'] = 'regression'
+
     train_df, val_df = run_preprocessing_pipeline(config)
     
     models = {
@@ -35,16 +36,8 @@ def main():
         print("Training...")
         model.train(train_df)
         
-        print("Predicting...")
-        preds = model.predict(val_df)
-        print(f"Predictions shape: {preds.shape}")
-        
         print("Saving...")
         model.save(name)
-        
-        print("Loading...")
-        model.load(name)
-        print("Done.\n")
 
 if __name__ == "__main__":
     main()

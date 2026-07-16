@@ -1,5 +1,10 @@
 model_type: classification # regression | classification | timeseries
 
+train_start_date: "2025-01-01"
+train_end_date: "2025-12-31"
+val_start_date: "2026-01-01"
+val_end_date: "2026-05-31"
+
 data:
   enabled: true
   symbol: BTC
@@ -75,3 +80,26 @@ target:
     - source: close
       method: next_close
       horizon: 1
+
+primary_metric: sharpe_ratio
+
+models:
+  classification:
+    - name: logistic_regression
+    - name: decision_tree
+    - name: random_forest
+    - name: extra_trees
+    - name: xgboost
+    - name: lightgbm
+    - name: catboost
+    - name: svm
+  regression:
+    - name: lightgbm
+    - name: svr
+    - name: linear_regression
+    - name: catboost
+    - name: xgboost
+    - name: ridge
+    - name: lasso
+    - name: random_forest
+    - name: extra_trees

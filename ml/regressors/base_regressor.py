@@ -24,9 +24,9 @@ class BaseRegressor:
 
     def save(self, model_name: str):
         os.makedirs('ml/models/', exist_ok=True)
-        path = f'ml/models/{model_name}_model.pkl'
+        path = f'ml/models/{model_name}_reg_model.pkl'
         joblib.dump(self.model, path)
 
     def load(self, model_name: str):
-        path = f'ml/models/{model_name}_model.pkl'
+        path = f'ml/models/{model_name}_reg_model.pkl'
         self.model = joblib.load(path)

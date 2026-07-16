@@ -2,7 +2,7 @@
 Helper functions for preprocessing scalers
 """
 import pandas as pd
-from ml.preprocessing.stationarity import feature_cols
+from preprocess_techs.helpers import feature_cols
 
 # MinMax Scaler
 

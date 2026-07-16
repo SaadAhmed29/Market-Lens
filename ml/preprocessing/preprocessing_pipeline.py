@@ -28,15 +28,15 @@ def run_preprocessing_pipeline(config: dict) -> tuple[pd.DataFrame, pd.DataFrame
     
     if all([train_start_date, train_end_date, val_start_date, val_end_date]):
         if 'date_time' in df.columns:
-            date_series = pd.to_datetime(df['date_time'])
-            train_mask = (date_series >= pd.to_datetime(train_start_date)) & (date_series <= pd.to_datetime(train_end_date))
-            val_mask = (date_series >= pd.to_datetime(val_start_date)) & (date_series <= pd.to_datetime(val_end_date))
+            date_series = pd.to_datetime(df['date_time'], utc=True)
+            train_mask = (date_series >= pd.to_datetime(train_start_date, utc=True)) & (date_series <= pd.to_datetime(train_end_date, utc=True))
+            val_mask = (date_series >= pd.to_datetime(val_start_date, utc=True)) & (date_series <= pd.to_datetime(val_end_date, utc=True))
             train_df = df[train_mask].copy()
             val_df = df[val_mask].copy()
         else:
-            index_series = pd.to_datetime(df.index)
-            train_mask = (index_series >= pd.to_datetime(train_start_date)) & (index_series <= pd.to_datetime(train_end_date))
-            val_mask = (index_series >= pd.to_datetime(val_start_date)) & (index_series <= pd.to_datetime(val_end_date))
+            index_series = pd.to_datetime(df.index, utc=True)
+            train_mask = (index_series >= pd.to_datetime(train_start_date, utc=True)) & (index_series <= pd.to_datetime(train_end_date, utc=True))
+            val_mask = (index_series >= pd.to_datetime(val_start_date, utc=True)) & (index_series <= pd.to_datetime(val_end_date, utc=True))
             train_df = df[train_mask].copy()
             val_df = df[val_mask].copy()
     else:

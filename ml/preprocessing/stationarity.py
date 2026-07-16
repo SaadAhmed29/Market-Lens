@@ -4,7 +4,6 @@ Helper functions for stationarity analysis
 
 import pandas as pd
 import numpy as np
-from ml.preprocessing.stationarity import feature_cols
 
 
 # Fractional Differencing
@@ -49,6 +48,9 @@ def fractional_differencing(df: pd.DataFrame) -> pd.DataFrame:
     reversed_weights = weights[::-1]
 
     df = df.copy()
+
+    from preprocess_techs.helpers import feature_cols
+
     cols = feature_cols(df)
 
     for col in cols:

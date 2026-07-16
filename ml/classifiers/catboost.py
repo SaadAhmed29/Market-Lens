@@ -3,4 +3,4 @@ from catboost import CatBoostClassifier
 
 class CatBoostModel(BaseClassifier):
     def __init__(self):
-        super().__init__(CatBoostClassifier(verbose=0))
+        super().__init__(CatBoostClassifier(verbose=0, allow_writing_files=False))

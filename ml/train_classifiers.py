@@ -14,7 +14,8 @@ from ml.classifiers.svm import SVMModel
 def main():
     config_path = "ml/config.yaml"
     config = load_ml_config(config_path)
-    
+    config['model_type'] = 'classification'
+
     train_df, val_df = run_preprocessing_pipeline(config)
     
     models = {
@@ -33,20 +34,9 @@ def main():
         print("Training...")
         model.train(train_df)
         
-        print("Predicting...")
-        preds = model.predict(val_df)
-        print(f"Predictions shape: {preds.shape}")
-        
-        print("Predicting Probabilities...")
-        probas = model.predict_proba(val_df)
-        print(f"Probabilities shape: {probas.shape}")
-        
         print("Saving...")
         model.save(name)
-        
-        print("Loading...")
-        model.load(name)
-        print("Done.\n")
+
 
 if __name__ == "__main__":
     main()

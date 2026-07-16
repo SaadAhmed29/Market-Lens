@@ -3,6 +3,9 @@ from ml.data_utils import merge_ohlcv_indicators, fetch_sentiment_data, map_sent
 from utils.db import get_engine
 from data.data_downloader import DataFetcher
 from indicators.talib_indicators import TalibIndicators
+from ml.utils.logging import get_logger
+
+logger = get_logger(__name__)
 
 def build_dataset(config: dict) -> pd.DataFrame:
     """Builds the ML dataset by merging OHLCV data with technical indicators."""
@@ -14,6 +17,7 @@ def build_dataset(config: dict) -> pd.DataFrame:
     # When data.enabled=False the raw OHLCV columns are dropped from the final output.
     include_ohlcv = data_cfg.get('enabled', False)
 
+    logger.info("Loading dataset...")
     raw_df, _ = DataFetcher.get_updated_df(
         exchange=data_cfg['exchange'],
         symbol=data_cfg['symbol'],
@@ -60,6 +64,8 @@ def build_dataset(config: dict) -> pd.DataFrame:
     indicators.df = ohlcv_df
     indicators.config = talib_config
     
+    logger.debug(f"Applying feature selection/indicators: {indicator_list}")
+    
     # get_indicators_df returns ohlcv + indicators
     combined_ind = indicators.get_indicators_df(indicator_list)
     
@@ -80,8 +86,10 @@ def build_dataset(config: dict) -> pd.DataFrame:
         engine = get_engine()
         sentiment_df = fetch_sentiment_data(start_date, end_date, engine)
         final_df = map_sentiment_to_ohlcv(final_df, sentiment_df, alias)
+        logger.debug(f"Applied sentiment mapping for alias {alias}")
 
     # Target — must run before OHLCV columns are dropped (source column e.g. 'close' is still needed)
+    logger.debug("Generating target...")
     final_df = build_target(final_df, config)
 
     # Drop raw OHLCV columns from output when data.enabled=False

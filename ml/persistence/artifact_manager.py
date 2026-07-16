@@ -2,8 +2,12 @@ import os
 import json
 import pandas as pd
 from typing import Any
+from ml.utils.logging import get_logger
+
+logger = get_logger(__name__)
 
 def save_artifact(model_name: str, config: dict, train_df: pd.DataFrame, val_df: pd.DataFrame, model: Any, scaler: str, stationarity: str):
+    logger.info("Artifact saving started.")
     artifacts_dir = 'ml/artifacts/'
     os.makedirs(artifacts_dir, exist_ok=True)
     
@@ -61,5 +65,10 @@ def save_artifact(model_name: str, config: dict, train_df: pd.DataFrame, val_df:
     }
     
     file_path = os.path.join(artifacts_dir, f"{model_name}_config.json")
-    with open(file_path, 'w') as f:
-        json.dump(artifact, f, indent=4)
+    try:
+        with open(file_path, 'w') as f:
+            json.dump(artifact, f, indent=4)
+        logger.info(f"Artifact saved successfully to {file_path}")
+    except Exception as e:
+        logger.error(f"Error saving artifact: {e}")
+        raise

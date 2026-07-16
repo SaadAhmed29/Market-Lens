@@ -5,6 +5,9 @@ from ml.preprocessing.preprocessing_pipeline import run_preprocessing_pipeline
 from ml.evaluation.regression_metrics import mae, mse, rmse
 from ml.evaluation.classification_metrics import accuracy, precision, recall
 from ml.evaluation.stats import calculate_stats
+from ml.utils.logging import get_logger
+
+logger = get_logger(__name__)
 
 def run_evaluation(config_path):
     config = load_config(config_path)
@@ -17,6 +20,7 @@ def run_evaluation(config_path):
         
     for filename in os.listdir(models_dir):
         if filename.endswith('_clf_model.pkl') or filename.endswith('_reg_model.pkl'):
+            logger.info(f"Model found: {filename}")
             if filename.endswith('_clf_model.pkl'):
                 model_name = filename.replace('_clf_model.pkl', '')
                 model_type = 'classification'
@@ -33,7 +37,9 @@ def run_evaluation(config_path):
                 base_model = BaseClassifier(None)
                 
             base_model.load(model_name)
+            logger.info(f"Model {model_name} loaded.")
             predictions = base_model.predict(val_df)
+            logger.info(f"Predictions generated for {model_name}.")
             
             metrics = {}
             if model_type == 'regression':
@@ -47,6 +53,7 @@ def run_evaluation(config_path):
                 
             stats = calculate_stats(predictions, val_df, model_type)
             metrics['backtest_stats'] = stats
+            logger.debug(f"Metrics calculated for {model_name}.")
             
             # Use full stem (e.g. xgboost_clf or xgboost_reg) so clf/reg don't overwrite each other
             full_stem = filename.replace('_model.pkl', '')
@@ -55,7 +62,7 @@ def run_evaluation(config_path):
             metrics_path = os.path.join(metrics_dir, f"{full_stem}_metrics.json")
             with open(metrics_path, 'w') as f:
                 json.dump(metrics, f, indent=4)
-            print(f"Saved {metrics_path}")
+            logger.info(f"Saved metrics to {metrics_path}")
 
     # Read primary metric and rank models
     primary_metric = config.get('primary_metric')
@@ -89,6 +96,7 @@ def run_evaluation(config_path):
     results.sort(key=lambda x: x[1], reverse=True)
     
     print(f"\nModel Ranking by {primary_metric} (Descending):")
+    logger.info(f"Printing model ranking by {primary_metric}")
     print("-" * 50)
     for idx, (name, val) in enumerate(results, 1):
         print(f"{idx}. {name:<30} | {val:.4f}")

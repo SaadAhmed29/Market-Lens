@@ -46,3 +46,4 @@ stats/output/
 ml/artifacts/
 ml/models/
 ml/metrics/
+ml/logs/

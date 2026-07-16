@@ -2,6 +2,9 @@ import pandas as pd
 from ml.data_formation import build_dataset
 from ml.preprocessing.scalars import minmax_scaler, maxabs_scaler
 from ml.preprocessing.stationarity import fractional_differencing
+from ml.utils.logging import get_logger
+
+logger = get_logger(__name__)
 
 def run_preprocessing_pipeline(config: dict) -> tuple[pd.DataFrame, pd.DataFrame]:
     """
@@ -48,15 +51,20 @@ def run_preprocessing_pipeline(config: dict) -> tuple[pd.DataFrame, pd.DataFrame
     # Apply scaling
     model_type = config.get('model_type', 'classification')
     
+    logger.info(f"Selected scaling method for model_type: {model_type}")
     if model_type == 'classification':
         train_df, val_df = minmax_scaler(train_df, val_df)
+        logger.debug("Fitted minmax_scaler")
     elif model_type in ['regression', 'timeseries']:
         train_df, val_df = maxabs_scaler(train_df, val_df)
+        logger.debug("Fitted maxabs_scaler")
         
     # Apply fractional differencing
+    logger.debug("Applying fractional differencing...")
     train_df = fractional_differencing(train_df)
     val_df = fractional_differencing(val_df)
     
+    logger.info(f"Train shape: {train_df.shape}, Val shape: {val_df.shape} after preprocessing")
     return train_df, val_df
 
 

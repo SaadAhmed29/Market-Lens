@@ -28,8 +28,8 @@ def minmax_scaler(train_df: pd.DataFrame, val_df: pd.DataFrame) -> tuple[pd.Data
 
     import os
     import joblib
-    os.makedirs('ml/models/', exist_ok=True)
-    joblib.dump(scaler, 'ml/models/minmax_scaler.pkl')
+    os.makedirs('ml/artifacts/', exist_ok=True)
+    joblib.dump(scaler, 'ml/artifacts/minmax_scaler.pkl')
 
     return train_out, val_out
 
@@ -54,7 +54,7 @@ def maxabs_scaler(train_df: pd.DataFrame, val_df: pd.DataFrame) -> tuple[pd.Data
 
     import os
     import joblib
-    os.makedirs('ml/models/', exist_ok=True)
-    joblib.dump(scaler, 'ml/models/maxabs_scaler.pkl')
+    os.makedirs('ml/artifacts/', exist_ok=True)
+    joblib.dump(scaler, 'ml/artifacts/maxabs_scaler.pkl')
 
     return train_out, val_out

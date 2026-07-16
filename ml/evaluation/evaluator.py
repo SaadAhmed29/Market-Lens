@@ -57,5 +57,41 @@ def run_evaluation(config_path):
                 json.dump(metrics, f, indent=4)
             print(f"Saved {metrics_path}")
 
+    # Read primary metric and rank models
+    primary_metric = config.get('primary_metric')
+    if not primary_metric:
+        print("No primary_metric found in config. Skipping ranking.")
+        return
+        
+    metrics_dir = 'ml/metrics/'
+    if not os.path.exists(metrics_dir):
+        return
+        
+    results = []
+    for filename in os.listdir(metrics_dir):
+        if not filename.endswith('_metrics.json'):
+            continue
+            
+        filepath = os.path.join(metrics_dir, filename)
+        with open(filepath, 'r') as f:
+            data = json.load(f)
+            
+        val = None
+        if primary_metric in data:
+            val = data[primary_metric]
+        elif 'backtest_stats' in data and primary_metric in data['backtest_stats']:
+            val = data['backtest_stats'][primary_metric]
+            
+        if val is not None:
+            model_name_display = filename.replace('_metrics.json', '')
+            results.append((model_name_display, val))
+            
+    results.sort(key=lambda x: x[1], reverse=True)
+    
+    print(f"\nModel Ranking by {primary_metric} (Descending):")
+    print("-" * 50)
+    for idx, (name, val) in enumerate(results, 1):
+        print(f"{idx}. {name:<30} | {val:.4f}")
+
 if __name__ == "__main__":
     run_evaluation("ml/config.yaml")

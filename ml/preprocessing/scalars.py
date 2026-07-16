@@ -26,6 +26,11 @@ def minmax_scaler(train_df: pd.DataFrame, val_df: pd.DataFrame) -> tuple[pd.Data
     train_out[cols] = scaler.fit_transform(train_df[cols])
     val_out[cols] = scaler.transform(val_df[cols])
 
+    import os
+    import joblib
+    os.makedirs('ml/models/', exist_ok=True)
+    joblib.dump(scaler, 'ml/models/minmax_scaler.pkl')
+
     return train_out, val_out
 
 
@@ -46,5 +51,10 @@ def maxabs_scaler(train_df: pd.DataFrame, val_df: pd.DataFrame) -> tuple[pd.Data
     scaler = MaxAbsScaler()
     train_out[cols] = scaler.fit_transform(train_df[cols])
     val_out[cols] = scaler.transform(val_df[cols])
+
+    import os
+    import joblib
+    os.makedirs('ml/models/', exist_ok=True)
+    joblib.dump(scaler, 'ml/models/maxabs_scaler.pkl')
 
     return train_out, val_out

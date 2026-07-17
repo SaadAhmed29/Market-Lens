@@ -19,10 +19,25 @@ def save_artifact(model_name: str, config: dict, train_df: pd.DataFrame, val_df:
     
     # Extract underlying model for hyperparameters
     actual_model = getattr(model, 'model', model)
-    try:
-        hyperparams = actual_model.get_params()
-    except Exception:
+    
+    model_class_name = model.__class__.__name__
+    if model_class_name in ['BiLSTMClassifier', 'GRURegressor']:
         hyperparams = {}
+        models_cfg = config.get('models', {})
+        base_model_name = model_name.replace('_clf', '').replace('_reg', '')
+        for task_models in models_cfg.values():
+            if isinstance(task_models, list):
+                for m_cfg in task_models:
+                    if isinstance(m_cfg, dict) and m_cfg.get('name') == base_model_name:
+                        hyperparams = m_cfg.get('params', {})
+                        break
+                if hyperparams:
+                    break
+    else:
+        try:
+            hyperparams = actual_model.get_params()
+        except Exception:
+            hyperparams = {}
 
     def safe_serialize(obj):
         try:

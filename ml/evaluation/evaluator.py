@@ -21,45 +21,65 @@ def run_evaluation(config_path):
         return
         
     for filename in os.listdir(models_dir):
-        if filename.endswith(f'_clf_model_{timeframe}.pkl') or filename.endswith(f'_reg_model_{timeframe}.pkl'):
+        path = os.path.join(models_dir, filename)
+        
+        is_dl_model = ('bilstm' in filename or 'gru' in filename) and filename.endswith(f'_{timeframe}.keras')
+        is_sklearn_model = filename.endswith(f'_clf_model_{timeframe}.pkl') or filename.endswith(f'_reg_model_{timeframe}.pkl')
+        
+        if is_dl_model or is_sklearn_model:
             logger.info(f"Model found: {filename}")
-            if filename.endswith(f'_clf_model_{timeframe}.pkl'):
-                model_name = filename.replace(f'_clf_model_{timeframe}.pkl', '')
-                model_type = 'classification'
-            else:
-                model_name = filename.replace(f'_reg_model_{timeframe}.pkl', '')
-                model_type = 'regression'
-            print(f"Evaluating {model_name}...")
             
-            if 'reg_model' in filename:
-                from ml.regressors.base_regressor import BaseRegressor
-                base_model = BaseRegressor(None)
-            elif 'clf_model' in filename:
-                from ml.classifiers.base_classifier import BaseClassifier
-                base_model = BaseClassifier(None)
-                
-            base_model.load(model_name)
+            if is_dl_model:
+                if 'bilstm' in filename:
+                    model_name = 'bilstm'
+                    model_type = 'classification'
+                    from ml.classifiers.bilstm import BiLSTMClassifier
+                    base_model = BiLSTMClassifier()
+                    base_model.load(model_name, timeframe)
+                    full_stem = f"{model_name}_clf_{timeframe}"
+                else:
+                    model_name = 'gru'
+                    model_type = 'regression'
+                    from ml.regressors.gru import GRURegressor
+                    base_model = GRURegressor()
+                    base_model.load(model_name, timeframe)
+                    full_stem = f"{model_name}_reg_{timeframe}"
+            else:
+                if filename.endswith(f'_clf_model_{timeframe}.pkl'):
+                    model_name = filename.replace(f'_clf_model_{timeframe}.pkl', '')
+                    model_type = 'classification'
+                    from ml.classifiers.base_classifier import BaseClassifier
+                    base_model = BaseClassifier(None)
+                else:
+                    model_name = filename.replace(f'_reg_model_{timeframe}.pkl', '')
+                    model_type = 'regression'
+                    from ml.regressors.base_regressor import BaseRegressor
+                    base_model = BaseRegressor(None)
+                    
+                base_model.load(model_name)
+                full_stem = filename.replace('_model', '').replace(f'.pkl', '')
+
+            print(f"Evaluating {model_name}...")
             logger.info(f"Model {model_name} loaded.")
             predictions = base_model.predict(val_df)
             logger.info(f"Predictions generated for {model_name}.")
             
+            aligned_val_df = val_df.loc[predictions.index]
+            aligned_y_true = aligned_val_df['target']
+            
             metrics = {}
             if model_type == 'regression':
-                metrics['mae'] = mae(val_df['target'], predictions)
-                metrics['mse'] = mse(val_df['target'], predictions)
-                metrics['rmse'] = rmse(val_df['target'], predictions)
+                metrics['mae'] = mae(aligned_y_true, predictions)
+                metrics['mse'] = mse(aligned_y_true, predictions)
+                metrics['rmse'] = rmse(aligned_y_true, predictions)
             else:
-                metrics['accuracy'] = accuracy(val_df['target'], predictions)
-                metrics['precision'] = precision(val_df['target'], predictions)
-                metrics['recall'] = recall(val_df['target'], predictions)
+                metrics['accuracy'] = accuracy(aligned_y_true, predictions)
+                metrics['precision'] = precision(aligned_y_true, predictions)
+                metrics['recall'] = recall(aligned_y_true, predictions)
                 
-            stats = calculate_stats(predictions, val_df, model_type)
+            stats = calculate_stats(predictions, aligned_val_df, model_type)
             metrics['backtest_stats'] = stats
             logger.debug(f"Metrics calculated for {model_name}.")
-            
-            # Use full stem (e.g. xgboost_clf or xgboost_reg) so clf/reg don't overwrite each other
-            full_stem = filename.replace('_model', '')
-            full_stem = full_stem.replace(f'.pkl', '')
             
             metrics_dir = 'ml/metrics/'
             os.makedirs(metrics_dir, exist_ok=True)

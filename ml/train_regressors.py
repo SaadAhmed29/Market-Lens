@@ -23,30 +23,38 @@ def main():
             
         print(f"--- {name} ---")
         
-        module_name = f"ml.regressors.{name}"
-        try:
-            module = importlib.import_module(module_name)
-        except ImportError:
-            print(f"Module {module_name} not found. Skipping.")
-            continue
-            
-        model_class = None
-        for obj_name, obj in inspect.getmembers(module, inspect.isclass):
-            if obj_name.endswith('Model') and obj.__module__ == module_name:
-                model_class = obj
-                break
+        if name == 'gru':
+            from ml.regressors.gru import GRURegressor
+            model = GRURegressor()
+        else:
+            module_name = f"ml.regressors.{name}"
+            try:
+                module = importlib.import_module(module_name)
+            except ImportError:
+                print(f"Module {module_name} not found. Skipping.")
+                continue
                 
-        if not model_class:
-            print(f"No class ending with 'Model' found in {module_name}. Skipping.")
-            continue
-            
-        model = model_class()
+            model_class = None
+            for obj_name, obj in inspect.getmembers(module, inspect.isclass):
+                if obj_name.endswith('Model') and obj.__module__ == module_name:
+                    model_class = obj
+                    break
+                    
+            if not model_class:
+                print(f"No class ending with 'Model' found in {module_name}. Skipping.")
+                continue
+                
+            model = model_class()
         
         print("Training...")
         model.train(train_df)
         
         print("Saving...")
-        model.save(name)
+        if name == 'gru':
+            timeframe = config.get('data', {}).get('timeframe')
+            model.save(name, timeframe)
+        else:
+            model.save(name)
         
         print("Saving artifact...")
         save_artifact(f"{name}_reg", config, train_df, val_df, model, scaler_str, stationarity_str)

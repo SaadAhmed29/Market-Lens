@@ -93,6 +93,24 @@ models:
     - name: lightgbm
     - name: catboost
     - name: svm
+
+    - name: bilstm
+      params:
+        sequence_length: 60
+        hidden_units: [64, 32]
+        dropout: 0.3
+        recurrent_dropout: 0.2
+        dense_units: 16
+        activation: relu
+        output_activation: softmax
+        optimizer: adam
+        learning_rate: 0.001
+        loss: categorical_crossentropy
+        metrics: ['accuracy']
+        batch_size: 32
+        epochs: 10
+        early_stopping_patience: 3
+
   regression:
     - name: lightgbm
     - name: svr
@@ -103,3 +121,21 @@ models:
     - name: lasso
     - name: random_forest
     - name: extra_trees
+
+    - name: gru
+      params:
+        sequence_length: 60
+        hidden_units: [64, 32]
+        dropout: 0.2
+        recurrent_dropout: 0.2
+        dense_units: 16
+        activation: relu
+        output_activation: linear
+        optimizer: adam
+        learning_rate: 0.001
+        batch_size: 32
+        epochs: 10
+        loss: mse
+        metrics:
+          - mae
+        early_stopping_patience: 3

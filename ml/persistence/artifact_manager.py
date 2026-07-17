@@ -3,7 +3,7 @@ import json
 import pandas as pd
 from typing import Any
 from ml.utils.logging import get_logger
-from ml.config import load_config
+from utils.config import load_config
 
 logger = get_logger(__name__)
 
@@ -11,8 +11,6 @@ def save_artifact(model_name: str, config: dict, train_df: pd.DataFrame, val_df:
     logger.info("Artifact saving started.")
     artifacts_dir = 'ml/artifacts/'
     os.makedirs(artifacts_dir, exist_ok=True)
-
-    config = load_config('ml/config.yaml')
 
     data_cfg = config.get('data', {})
     timeframe = data_cfg.get('timeframe')

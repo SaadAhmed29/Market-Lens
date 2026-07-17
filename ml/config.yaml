@@ -81,7 +81,7 @@ target:
       method: next_close
       horizon: 1
 
-primary_metric: sharpe_ratio
+primary_metric: avg_return
 
 models:
   classification:

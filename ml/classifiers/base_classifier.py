@@ -4,6 +4,7 @@ import pandas as pd
 from typing import Any
 from sklearn.preprocessing import LabelEncoder
 from ml.utils.logging import get_logger
+from utils.config import load_config
 
 logger = get_logger(__name__)
 
@@ -11,6 +12,9 @@ class BaseClassifier:
     def __init__(self, model: Any):
         self.model = model
         self.le = LabelEncoder()
+        self.config = load_config('ml/config.yaml')
+        self.data_cfg = self.config.get('data')
+        self.timeframe = self.data_cfg.get('timeframe')
 
     def train(self, train_df: pd.DataFrame):
         logger.info("Training started...")
@@ -60,7 +64,7 @@ class BaseClassifier:
 
     def save(self, model_name: str):
         os.makedirs('ml/models/', exist_ok=True)
-        path = f'ml/models/{model_name}_clf_model.pkl'
+        path = f'ml/models/{model_name}_clf_model_{self.timeframe}.pkl'
         try:
             joblib.dump({'model': self.model, 'le': self.le}, path)
             logger.info(f"Model saved to {path}")
@@ -69,7 +73,7 @@ class BaseClassifier:
             raise
 
     def load(self, model_name: str):
-        path = f'ml/models/{model_name}_clf_model.pkl'
+        path = f'ml/models/{model_name}_clf_model_{self.timeframe}.pkl'
         try:
             data = joblib.load(path)
             if isinstance(data, dict) and 'model' in data:

@@ -11,21 +11,23 @@ logger = get_logger(__name__)
 
 def run_evaluation(config_path):
     config = load_config(config_path)
+    data_cfg = config.get('data')
+    timeframe = data_cfg.get('timeframe')
     train_df, val_df = run_preprocessing_pipeline(config)
     
-    models_dir = 'ml/models/'
+    models_dir = f'ml/models/'
     if not os.path.exists(models_dir):
         print(f"Directory {models_dir} does not exist.")
         return
         
     for filename in os.listdir(models_dir):
-        if filename.endswith('_clf_model.pkl') or filename.endswith('_reg_model.pkl'):
+        if filename.endswith(f'_clf_model_{timeframe}.pkl') or filename.endswith(f'_reg_model_{timeframe}.pkl'):
             logger.info(f"Model found: {filename}")
-            if filename.endswith('_clf_model.pkl'):
-                model_name = filename.replace('_clf_model.pkl', '')
+            if filename.endswith(f'_clf_model_{timeframe}.pkl'):
+                model_name = filename.replace(f'_clf_model_{timeframe}.pkl', '')
                 model_type = 'classification'
             else:
-                model_name = filename.replace('_reg_model.pkl', '')
+                model_name = filename.replace(f'_reg_model_{timeframe}.pkl', '')
                 model_type = 'regression'
             print(f"Evaluating {model_name}...")
             
@@ -56,7 +58,9 @@ def run_evaluation(config_path):
             logger.debug(f"Metrics calculated for {model_name}.")
             
             # Use full stem (e.g. xgboost_clf or xgboost_reg) so clf/reg don't overwrite each other
-            full_stem = filename.replace('_model.pkl', '')
+            full_stem = filename.replace('_model', '')
+            full_stem = full_stem.replace(f'.pkl', '')
+            
             metrics_dir = 'ml/metrics/'
             os.makedirs(metrics_dir, exist_ok=True)
             metrics_path = os.path.join(metrics_dir, f"{full_stem}_metrics.json")

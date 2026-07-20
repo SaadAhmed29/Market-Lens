@@ -65,7 +65,7 @@ def get_signal_df(save_csv: bool = False, exchange: str = "binance", symbol: str
         symbol=symbol,
         start=start,
         end=end,
-        time_frame="1h",
+        time_frame=strategy_config["timehorizon"],
         config=indicator_config,  
         selected_indicators=selected_indicators
     )
@@ -90,7 +90,6 @@ def get_signal_df(save_csv: bool = False, exchange: str = "binance", symbol: str
         return df
 
     signal = signal[["signal"]]
-    print(signal)
     return signal
 
 def main():

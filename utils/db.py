@@ -188,7 +188,7 @@ def create_all_tables() -> None:
     engine.dispose()
     print("[v] Schemas and tables ensured for both exchanges in Market-Lens database.")
 
-def save_ledger(ledger_df: pd.DataFrame, strategy_name: str) -> None:
+def save_ledger(ledger_df: pd.DataFrame, strategy_name: str, if_exists: str = 'replace') -> None:
     """Save backtest ledger to the backtest_ledgers schema, replacing any existing table."""
     if ledger_df is None or ledger_df.empty:
         return
@@ -207,10 +207,66 @@ def save_ledger(ledger_df: pd.DataFrame, strategy_name: str) -> None:
         table,
         engine,
         schema=schema,
-        if_exists='replace',
+        if_exists=if_exists,
         index=False
     )
     print(f"[v] Saved ledger to {schema}.{table}")
+
+def get_open_position(strategy_name: str) -> dict | None:
+    """Retrieve the currently open position for the strategy, if any."""
+    engine = get_engine()
+    schema = 'backtest_ledgers'
+    table = f"{strategy_name.lower()}_positions"
+    
+    with engine.connect() as conn:
+        try:
+            row = conn.execute(text(f"SELECT * FROM {schema}.{table} WHERE status='Open' LIMIT 1")).mappings().fetchone()
+            if row:
+                return dict(row)
+        except Exception:
+            pass
+    return None
+
+def upsert_position(position_dict: dict, strategy_name: str) -> None:
+    """Upsert the active position state into the {strategy_name}_positions table."""
+    engine = get_engine()
+    schema = 'backtest_ledgers'
+    table = f"{strategy_name.lower()}_positions"
+    
+    with engine.begin() as conn:
+        conn.execute(text(f"CREATE SCHEMA IF NOT EXISTS {schema}"))
+        conn.execute(text(f"""
+            CREATE TABLE IF NOT EXISTS {schema}.{table} (
+                trade_id SERIAL PRIMARY KEY,
+                direction TEXT,
+                entry_time TIMESTAMP WITH TIME ZONE,
+                entry_price FLOAT,
+                quantity FLOAT,
+                take_profit FLOAT,
+                stop_loss FLOAT,
+                current_price FLOAT,
+                unrealized_pnl FLOAT,
+                status TEXT
+            )
+        """))
+        
+        if "trade_id" in position_dict and position_dict["trade_id"] is not None:
+            conn.execute(text(f"""
+                UPDATE {schema}.{table}
+                SET current_price = :current_price,
+                    unrealized_pnl = :unrealized_pnl,
+                    status = :status,
+                    take_profit = :take_profit,
+                    stop_loss = :stop_loss
+                WHERE trade_id = :trade_id
+            """), position_dict)
+        else:
+            conn.execute(text(f"UPDATE {schema}.{table} SET status='Closed' WHERE status='Open'"))
+            conn.execute(text(f"""
+                INSERT INTO {schema}.{table} 
+                (direction, entry_time, entry_price, quantity, take_profit, stop_loss, current_price, unrealized_pnl, status)
+                VALUES (:direction, :entry_time, :entry_price, :quantity, :take_profit, :stop_loss, :current_price, :unrealized_pnl, :status)
+            """), position_dict)
 
 def create_signal_schema() -> None:
     """Create the signal schema if it does not exist."""
@@ -400,7 +456,7 @@ def create_backtest_config_table() -> None:
         if row_count == 0:
             default_config = {
                 "initial_balance": 10000.0,
-                "exit_on_opposite_signal": False,
+                "exit_on_opposite_signal": True,
                 "position_size": {"type": "fixed_percentage", "value": 10},
                 "commission": 0.05,
                 "slippage": 0.02,

@@ -319,7 +319,10 @@ class DataFetcher:
                 if not db_df.empty:
                     db_df.index = pd.to_datetime(db_df.index, utc=True)
         except Exception as e:
-            logger.warning(f"Failed to read from DB: {e}")
+            if "does not exist" in str(e):
+                logger.info(f"Table '{tbl_name}' does not exist yet. Missing data will be fetched from API.")
+            else:
+                logger.warning(f"Failed to read from DB: {e}")
             db_df = pd.DataFrame()
             
         missing_ranges = []
@@ -339,7 +342,7 @@ class DataFetcher:
         if missing_ranges:
             fetcher_config = {
                 "exchange": exchange,
-                "time_horizon": "1m",
+                "time_horizon": time_frame,
                 "start_date": start_dt.strftime("%Y-%m-%d"),
                 "end_date": end_dt.strftime("%Y-%m-%d"),
                 "fill_missing_data": "interpolation",

@@ -1,4 +1,5 @@
 sample_strategy:
+  timehorizon: 15m
   long:
     rule: AND
     conditions:
@@ -37,6 +38,7 @@ sample_strategy:
 
 
 my_strategy:
+  timehorizon: 15m
   long:
     rule: AND
     conditions:
@@ -55,6 +57,7 @@ my_strategy:
 
 
 rsi_strategy:
+  timehorizon: 15m
   long:
     rule: AND
     conditions:
@@ -73,6 +76,7 @@ rsi_strategy:
 
 
 macd_strategy:
+  timehorizon: 15m
   long:
     rule: AND
     conditions:
@@ -91,6 +95,7 @@ macd_strategy:
 
 
 doji_strategy:
+  timehorizon: 15m
   long:
     rule: AND
     conditions:
@@ -115,6 +120,7 @@ doji_strategy:
 
 
 sma_strategy:
+  timehorizon: 15m
   long:
     rule: AND
     conditions:

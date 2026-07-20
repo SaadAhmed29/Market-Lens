@@ -6,6 +6,57 @@ from data.data_downloader import DataFetcher
 from signals.main import get_signal_df
 from utils.db import save_ledger, create_signal_schema, save_signals
 
+def _calculate_entry_price(config: dict, open_price: float) -> float:
+    return open_price
+
+def _calculate_position_size(config: dict, balance: float, entry_price: float) -> float:
+    pos_type = config['position_size']['type']
+    pos_val = config['position_size']['value']
+    if pos_type == 'fixed_percentage':
+        position_value = balance * (pos_val / 100)
+    else:
+        raise ValueError(f"Unsupported position_size type: {pos_type}")
+    return position_value / entry_price
+
+def _calculate_exit_conditions(config: dict, direction: int, entry_price: float):
+    tp_enabled = config['take_profit'].get('enabled', True)
+    sl_enabled = config['stop_loss'].get('enabled', True)
+    tp_pct = config['take_profit']['value'] / 100
+    sl_pct = config['stop_loss']['value'] / 100
+    
+    tp = np.nan
+    sl = np.nan
+    if tp_enabled:
+        tp = entry_price * (1 + tp_pct) if direction == 1 else entry_price * (1 - tp_pct)
+    if sl_enabled:
+        sl = entry_price * (1 - sl_pct) if direction == 1 else entry_price * (1 + sl_pct)
+    return tp, sl
+
+def _apply_commission_slippage(config: dict, entry_price: float, exit_price: float, qty: float):
+    commission_rate = config.get('commission', 0.0)
+    slippage_rate = config.get('slippage', 0.0)
+    
+    entry_value = entry_price * qty
+    exit_value = exit_price * qty
+    
+    entry_comm = entry_value * commission_rate / 100
+    exit_comm = exit_value * commission_rate / 100
+    entry_slip = entry_value * slippage_rate / 100
+    exit_slip = exit_value * slippage_rate / 100
+    
+    return entry_comm + exit_comm, entry_slip + exit_slip
+
+def _calculate_pnl(direction: int, entry_price: float, exit_price: float, qty: float, commission: float, slippage: float) -> tuple[float, float]:
+    if direction == 1:
+        gross_pnl = (exit_price - entry_price) * qty
+    else:
+        gross_pnl = (entry_price - exit_price) * qty
+    net_pnl = gross_pnl - (commission + slippage)
+    return gross_pnl, net_pnl
+
+def _update_balance(balance: float, net_pnl: float) -> float:
+    return balance + net_pnl
+
 class BacktestEngine:
     def __init__(self, config: dict):
         create_signal_schema()
@@ -191,16 +242,10 @@ class BacktestEngine:
         N = len(self.ohlcv_df)
 
         def tp_sl_for(direction, entry_price):
-            tp = np.nan
-            sl = np.nan
-            if tp_enabled:
-                tp = entry_price * (1 + tp_pct) if direction == 1 else entry_price * (1 - tp_pct)
-            if sl_enabled:
-                sl = entry_price * (1 - sl_pct) if direction == 1 else entry_price * (1 + sl_pct)
-            return tp, sl
+            return _calculate_exit_conditions(self.config, direction, entry_price)
 
         def open_trade(direction, idx):
-            entry_price = opens[idx]
+            entry_price = _calculate_entry_price(self.config, opens[idx])
             tp, sl = tp_sl_for(direction, entry_price)
             return {
                 'signal': direction,
@@ -338,37 +383,22 @@ class BacktestEngine:
         # the loop runs over trades (small N) rather than 1m rows (large N).
         balance = initial_balance
         for i in range(n):
-            if pos_type == 'fixed_percentage':
-                position_value = balance * (pos_val / 100)
-            else:
-                raise ValueError(f"Unsupported position_size type: {pos_type}")
-
-            qty = position_value / entry_price[i]
+            qty = _calculate_position_size(self.config, balance, entry_price[i])
             quantities[i] = qty
 
-            if signal[i] == 1:  # Long
-                gross_pnl = (exit_price[i] - entry_price[i]) * qty
-            else:  # Short
-                gross_pnl = (entry_price[i] - exit_price[i]) * qty
+            comm, slip = _apply_commission_slippage(self.config, entry_price[i], exit_price[i], qty)
+            gross_pnl, net_pnl = _calculate_pnl(signal[i], entry_price[i], exit_price[i], qty, comm, slip)
+
             gross_pnls[i] = gross_pnl
-
-            entry_value = entry_price[i] * qty
-            exit_value = exit_price[i] * qty
-
-            entry_comm = entry_value * commission_rate / 100
-            exit_comm = exit_value * commission_rate / 100
-            entry_slip = entry_value * slippage_rate / 100
-            exit_slip = exit_value * slippage_rate / 100
-
-            entry_commissions[i] = entry_comm
-            exit_commissions[i] = exit_comm
-            entry_slippages[i] = entry_slip
-            exit_slippages[i] = exit_slip
-
-            net_pnl = gross_pnl - (entry_comm + exit_comm + entry_slip + exit_slip)
             net_pnls[i] = net_pnl
+            
+            # Divide by 2 for entry/exit tracking simplicity in the ledger arrays, or just store the total
+            entry_commissions[i] = comm / 2
+            exit_commissions[i] = comm / 2
+            entry_slippages[i] = slip / 2
+            exit_slippages[i] = slip / 2
 
-            balance += net_pnl
+            balance = _update_balance(balance, net_pnl)
             balances_after[i] = balance
 
         self.trade_ledger = pd.DataFrame({

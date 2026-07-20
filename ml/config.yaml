@@ -64,7 +64,7 @@ target:
   classification:
     - source: close
       method: future_direction
-      horizon: 5
+      horizon: 1
       threshold: 0.30
       classes:
         positive: 1
@@ -74,7 +74,7 @@ target:
   regression:
     - source: close
       method: future_return
-      horizon: 5
+      horizon: 1
   
   timeseries:
     - source: close
@@ -106,7 +106,7 @@ models:
         optimizer: adam
         learning_rate: 0.001
         loss: categorical_crossentropy
-        metrics: ['accuracy']
+        metrics: ["accuracy"]
         batch_size: 32
         epochs: 10
         early_stopping_patience: 3
@@ -136,6 +136,90 @@ models:
         batch_size: 32
         epochs: 10
         loss: mse
-        metrics:
-          - mae
+        metrics: ["mae"]
         early_stopping_patience: 3
+
+  timeseries:
+    - name: nbeats
+      params:
+        input_chunk_length: 60
+        output_chunk_length: 1
+        forecast_horizon: 1
+        batch_size: 32
+        epochs: 10
+        random_seed: 42
+
+        hidden_layers: 3
+        hidden_units: 128
+        num_stacks: 20
+        num_blocks: 1
+        dropout: 0.10
+        optimizer: adam
+        learning_rate: 0.001
+        activation: relu
+
+        early_stopping_patience: 3
+        validation_frequency: 1
+        checkpointing: true
+        lr_scheduler: reduce_on_plateau
+        gradient_clipping: 1.0
+
+    - name: tcn
+      params:
+        input_chunk_length: 60
+        output_chunk_length: 1
+        forecast_horizon: 1
+        batch_size: 32
+        epochs: 10
+        random_seed: 42
+
+        hidden_layers: 3
+        hidden_units: 64
+        kernel_size: 3
+        num_filters: 32
+        dilation_base: 2
+        dropout: 0.20
+        optimizer: adam
+        learning_rate: 0.001
+        activation: relu
+
+        early_stopping_patience: 3
+        validation_frequency: 1
+        checkpointing: true
+        lr_scheduler: reduce_on_plateau
+        gradient_clipping: 1.0
+
+    - name: linear_regression
+      params:
+        input_chunk_length: 60
+        output_chunk_length: 1
+        forecast_horizon: 1
+        random_seed: 42
+
+        lags: 60
+        lags_past_covariates: 60
+        lags_future_covariates: null
+        fit_intercept: true
+
+    - name: lightgbm_classifier
+      params:
+        input_chunk_length: 60
+        output_chunk_length: 1
+        forecast_horizon: 1
+        random_seed: 42
+
+        lags: 60
+        lags_past_covariates: 60
+        lags_future_covariates: null
+        objective: multiclass
+        num_class: 3
+        num_leaves: 31
+        max_depth: 6
+        learning_rate: 0.05
+        n_estimators: 300
+        feature_fraction: 0.9
+        bagging_fraction: 0.8
+        bagging_freq: 5
+        min_child_samples: 20
+        lambda_l1: 0.0
+        lambda_l2: 0.0

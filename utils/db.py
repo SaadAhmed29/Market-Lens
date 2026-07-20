@@ -215,14 +215,17 @@ def save_ledger(ledger_df: pd.DataFrame, strategy_name: str, if_exists: str = 'r
 def get_open_position(strategy_name: str) -> dict | None:
     """Retrieve the currently open position for the strategy, if any."""
     engine = get_engine()
-    schema = 'backtest_ledgers'
-    table = f"{strategy_name.lower()}_positions"
-    
     with engine.connect() as conn:
         try:
-            row = conn.execute(text(f"SELECT * FROM {schema}.{table} WHERE status='Open' LIMIT 1")).mappings().fetchone()
+            row = conn.execute(
+                text("SELECT * FROM simulation.positions WHERE strategy_name=:name AND status='Open' LIMIT 1"),
+                {"name": strategy_name}
+            ).mappings().fetchone()
             if row:
-                return dict(row)
+                d = dict(row)
+                d['take_profit'] = d.pop('tp_price', None)
+                d['stop_loss'] = d.pop('sl_price', None)
+                return d
         except Exception:
             pass
     return None
@@ -713,6 +716,76 @@ def run_cli(options: list[str], preset_exchange: str | None = None,
 
     return result
 
+def create_simulation_schema() -> None:
+    """Create simulation schema and its tables."""
+    engine = get_engine()
+    with engine.begin() as conn:
+        conn.execute(text("CREATE SCHEMA IF NOT EXISTS simulation"))
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS simulation.positions (
+                strategy_name TEXT PRIMARY KEY,
+                entry_time TIMESTAMP WITH TIME ZONE,
+                direction TEXT,
+                entry_price FLOAT,
+                quantity FLOAT,
+                tp_price FLOAT,
+                sl_price FLOAT,
+                status TEXT
+            )
+        """))
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS simulation.stats (
+                strategy_name TEXT PRIMARY KEY,
+                final_balance FLOAT,
+                total_trades INTEGER,
+                sharpe_ratio FLOAT,
+                max_drawdown FLOAT,
+                win_rate FLOAT
+            )
+        """))
+    print("[v] simulation schema and tables ensured.")
+
+def upsert_simulation_position(strategy_name: str, position_data: dict) -> None:
+    """Upsert a single position row for the strategy in simulation.positions."""
+    engine = get_engine()
+    with engine.begin() as conn:
+        conn.execute(text("""
+            INSERT INTO simulation.positions (
+                strategy_name, entry_time, direction, entry_price, quantity, tp_price, sl_price, status
+            ) VALUES (
+                :strategy_name, :entry_time, :direction, :entry_price, :quantity, :tp_price, :sl_price, :status
+            ) ON CONFLICT (strategy_name) DO UPDATE SET
+                entry_time = EXCLUDED.entry_time,
+                direction = EXCLUDED.direction,
+                entry_price = EXCLUDED.entry_price,
+                quantity = EXCLUDED.quantity,
+                tp_price = EXCLUDED.tp_price,
+                sl_price = EXCLUDED.sl_price,
+                status = EXCLUDED.status
+        """), {
+            "strategy_name": strategy_name,
+            **position_data
+        })
+
+def upsert_simulation_stats(strategy_name: str, stats_data: dict) -> None:
+    """Upsert a single stats row for the strategy in simulation.stats."""
+    engine = get_engine()
+    with engine.begin() as conn:
+        conn.execute(text("""
+            INSERT INTO simulation.stats (
+                strategy_name, final_balance, total_trades, sharpe_ratio, max_drawdown, win_rate
+            ) VALUES (
+                :strategy_name, :final_balance, :total_trades, :sharpe_ratio, :max_drawdown, :win_rate
+            ) ON CONFLICT (strategy_name) DO UPDATE SET
+                final_balance = EXCLUDED.final_balance,
+                total_trades = EXCLUDED.total_trades,
+                sharpe_ratio = EXCLUDED.sharpe_ratio,
+                max_drawdown = EXCLUDED.max_drawdown,
+                win_rate = EXCLUDED.win_rate
+        """), {
+            "strategy_name": strategy_name,
+            **stats_data
+        })
 
 
 

@@ -1,0 +1,8 @@
+initial_balance: 10000
+
+position_size:
+  type: fixed_percentage      # fixed_percentage
+  value: 10                   # 10% of current balance
+
+commission: 0.05            # 0.05% per trade
+slippage: 0.02              # 0.02% execution slippage

@@ -79,7 +79,10 @@ def _update_simulation_stats(strategy_name: str, balance: float, sim_config: dic
     try:
         ledger = pd.read_sql(f"SELECT * FROM backtest_ledgers.{strategy_name.lower()}", engine)
         if ledger.empty:
-            stats = {'final_balance': round(balance, 4), 'total_trades': 0, 'sharpe_ratio': 0.0, 'max_drawdown': 0.0, 'win_rate': 0.0}
+            stats = {'final_balance': round(balance, 4), 'total_trades': 0}
+            stats.update({k: 0.0 for k in _SCALAR_METRIC_KEYS})
+            stats['consecutive_losses'] = 0
+            stats['consecutive_wins'] = 0        
         else:
             ledger['exit_time'] = pd.to_datetime(ledger['exit_time'])
             ledger = ledger.sort_values('exit_time').set_index('exit_time')
@@ -95,15 +98,31 @@ def _update_simulation_stats(strategy_name: str, balance: float, sim_config: dic
             
             from stats.metrics import calculate_metrics
             metrics = calculate_metrics(returns) if not returns.empty else {}
-            
+
+            SCALAR_METRIC_KEYS = [
+                'sharpe_ratio', 'sortino_ratio', 'calmar_ratio', 'max_drawdown', 'cagr',
+                'volatility', 'win_rate', 'profit_factor', 'average_win', 'average_loss',
+                'best_day', 'worst_day', 'var', 'cvar', 'skewness', 'kurtosis',
+                'recovery_factor', 'ulcer_index', 'avg_return', 'common_sense_ratio',
+                'comp', 'conditional_value_at_risk', 'cpc_index', 'expected_return',
+                'expected_shortfall', 'exposure', 'gain_to_pain_ratio', 'geometric_mean',
+                'ghpr', 'outlier_loss_ratio', 'outlier_win_ratio', 'payoff_ratio',
+                'profit_ratio', 'rar', 'risk_of_ruin', 'ror', 'tail_ratio',
+                'ulcer_performance_index', 'upi', 'win_loss_ratio', 'kelly_criterion',
+                'risk_return_ratio',
+            ]
+
             stats = {
                 'final_balance': round(balance, 4),
                 'total_trades': len(ledger),
-                'sharpe_ratio': round(metrics.get('sharpe_ratio') or 0.0, 4),
-                'max_drawdown': round(metrics.get('max_drawdown') or 0.0, 6),
-                'win_rate': round(metrics.get('win_rate') or 0.0, 4)
+                'consecutive_losses': int(metrics.get('consecutive_losses') or 0),
+                'consecutive_wins': int(metrics.get('consecutive_wins') or 0),
             }
-        upsert_simulation_stats(strategy_name, stats)
+            for key in SCALAR_METRIC_KEYS:
+                decimals = 6 if key == 'max_drawdown' else 4
+                stats[key] = round(metrics.get(key) or 0.0, decimals)
+
+            upsert_simulation_stats(strategy_name, stats)
     except Exception as e:
         logger.error(f"Failed to update stats: {e}")
 

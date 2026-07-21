@@ -789,8 +789,49 @@ def create_simulation_schema() -> None:
                 final_balance FLOAT,
                 total_trades INTEGER,
                 sharpe_ratio FLOAT,
+                sortino_ratio FLOAT,
+                calmar_ratio FLOAT,
                 max_drawdown FLOAT,
-                win_rate FLOAT
+                cagr FLOAT,
+                volatility FLOAT,
+                win_rate FLOAT,
+                profit_factor FLOAT,
+                average_win FLOAT,
+                average_loss FLOAT,
+                best_day FLOAT,
+                worst_day FLOAT,
+                var FLOAT,
+                cvar FLOAT,
+                skewness FLOAT,
+                kurtosis FLOAT,
+                recovery_factor FLOAT,
+                ulcer_index FLOAT,
+                avg_return FLOAT,
+                common_sense_ratio FLOAT,
+                comp FLOAT,
+                conditional_value_at_risk FLOAT,
+                consecutive_losses INTEGER,
+                consecutive_wins INTEGER,
+                cpc_index FLOAT,
+                expected_return FLOAT,
+                expected_shortfall FLOAT,
+                exposure FLOAT,
+                gain_to_pain_ratio FLOAT,
+                geometric_mean FLOAT,
+                ghpr FLOAT,
+                outlier_loss_ratio FLOAT,
+                outlier_win_ratio FLOAT,
+                payoff_ratio FLOAT,
+                profit_ratio FLOAT,
+                rar FLOAT,
+                risk_of_ruin FLOAT,
+                ror FLOAT,
+                tail_ratio FLOAT,
+                ulcer_performance_index FLOAT,
+                upi FLOAT,
+                win_loss_ratio FLOAT,
+                kelly_criterion FLOAT,
+                risk_return_ratio FLOAT
             )
         """))
     print("[v] simulation schema and tables ensured.")
@@ -823,22 +864,39 @@ def upsert_simulation_position(strategy_name: str, position_data: dict) -> None:
 def upsert_simulation_stats(strategy_name: str, stats_data: dict) -> None:
     """Upsert a single stats row for the strategy in simulation.stats."""
     engine = get_engine()
+
+    columns = [
+        "final_balance", "total_trades", "sharpe_ratio", "sortino_ratio",
+        "calmar_ratio", "max_drawdown", "cagr", "volatility", "win_rate",
+        "profit_factor", "average_win", "average_loss", "best_day", "worst_day",
+        "var", "cvar", "skewness", "kurtosis", "recovery_factor", "ulcer_index",
+        "avg_return", "common_sense_ratio", "comp", "conditional_value_at_risk",
+        "consecutive_losses", "consecutive_wins", "cpc_index", "expected_return",
+        "expected_shortfall", "exposure", "gain_to_pain_ratio", "geometric_mean",
+        "ghpr", "outlier_loss_ratio", "outlier_win_ratio", "payoff_ratio",
+        "profit_ratio", "rar", "risk_of_ruin", "ror", "tail_ratio",
+        "ulcer_performance_index", "upi", "win_loss_ratio", "kelly_criterion",
+        "risk_return_ratio",
+    ]
+
+    insert_cols = ", ".join(["strategy_name"] + columns)
+    insert_placeholders = ", ".join([":strategy_name"] + [f":{c}" for c in columns])
+    update_clause = ", ".join([f"{c} = EXCLUDED.{c}" for c in columns])
+
+    query = text(f"""
+        INSERT INTO simulation.stats (
+            {insert_cols}
+        ) VALUES (
+            {insert_placeholders}
+        ) ON CONFLICT (strategy_name) DO UPDATE SET
+            {update_clause}
+    """)
+
+    params = {"strategy_name": strategy_name}
+    params.update({c: stats_data.get(c) for c in columns})
+
     with engine.begin() as conn:
-        conn.execute(text("""
-            INSERT INTO simulation.stats (
-                strategy_name, final_balance, total_trades, sharpe_ratio, max_drawdown, win_rate
-            ) VALUES (
-                :strategy_name, :final_balance, :total_trades, :sharpe_ratio, :max_drawdown, :win_rate
-            ) ON CONFLICT (strategy_name) DO UPDATE SET
-                final_balance = EXCLUDED.final_balance,
-                total_trades = EXCLUDED.total_trades,
-                sharpe_ratio = EXCLUDED.sharpe_ratio,
-                max_drawdown = EXCLUDED.max_drawdown,
-                win_rate = EXCLUDED.win_rate
-        """), {
-            "strategy_name": strategy_name,
-            **stats_data
-        })
+        conn.execute(query, params)
 
 
 

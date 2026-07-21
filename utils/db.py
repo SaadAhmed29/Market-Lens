@@ -199,6 +199,21 @@ def save_ledger(ledger_df: pd.DataFrame, strategy_name: str, if_exists: str = 'r
     
     with engine.begin() as conn:
         conn.execute(text(f"CREATE SCHEMA IF NOT EXISTS {schema}"))
+        # Add trade_id column to existing tables that don't have it yet
+        conn.execute(text(f"""
+            DO $$
+            BEGIN
+                IF EXISTS (
+                    SELECT 1 FROM information_schema.tables
+                    WHERE table_schema = '{schema}' AND table_name = '{table}'
+                ) AND NOT EXISTS (
+                    SELECT 1 FROM information_schema.columns
+                    WHERE table_schema = '{schema}' AND table_name = '{table}' AND column_name = 'trade_id'
+                ) THEN
+                    ALTER TABLE {schema}.{table} ADD COLUMN trade_id INTEGER;
+                END IF;
+            END $$;
+        """))
         
     # Ensure columns are present and correctly named
     # entry_time, exit_time, direction, entry_price, exit_price, quantity, gross_pnl, commission, slippage, net_pnl, balance_after_trade
@@ -441,6 +456,14 @@ def seed_strategies() -> None:
             print(f"[v] Seeded {len(strategies)} strategies into meta_data.strategies.")
         except FileNotFoundError:
             print("[!] signals/config.yaml not found, skipping strategy seeding.")
+
+
+def load_strategies_config() -> list[dict]:
+    engine = get_engine()
+    with engine.begin() as conn:
+        rows = conn.execute(text("SELECT strategy_name, config FROM meta_data.strategies")).mappings().all()
+    
+    return [dict(row) for row in rows]
 
 
 def create_backtest_config_table() -> None:
@@ -723,6 +746,7 @@ def create_simulation_schema() -> None:
         conn.execute(text("CREATE SCHEMA IF NOT EXISTS simulation"))
         conn.execute(text("""
             CREATE TABLE IF NOT EXISTS simulation.positions (
+                trade_id INTEGER,
                 strategy_name TEXT PRIMARY KEY,
                 entry_time TIMESTAMP WITH TIME ZONE,
                 direction TEXT,
@@ -730,8 +754,34 @@ def create_simulation_schema() -> None:
                 quantity FLOAT,
                 tp_price FLOAT,
                 sl_price FLOAT,
+                current_price FLOAT,
+                unrealized_pnl FLOAT,
                 status TEXT
             )
+        """))
+        # Add missing columns if table already exists without them
+        conn.execute(text("""
+            DO $$
+            BEGIN
+                IF NOT EXISTS (
+                    SELECT 1 FROM information_schema.columns
+                    WHERE table_schema = 'simulation' AND table_name = 'positions' AND column_name = 'trade_id'
+                ) THEN
+                    ALTER TABLE simulation.positions ADD COLUMN trade_id INTEGER;
+                END IF;
+                IF NOT EXISTS (
+                    SELECT 1 FROM information_schema.columns
+                    WHERE table_schema = 'simulation' AND table_name = 'positions' AND column_name = 'current_price'
+                ) THEN
+                    ALTER TABLE simulation.positions ADD COLUMN current_price FLOAT;
+                END IF;
+                IF NOT EXISTS (
+                    SELECT 1 FROM information_schema.columns
+                    WHERE table_schema = 'simulation' AND table_name = 'positions' AND column_name = 'unrealized_pnl'
+                ) THEN
+                    ALTER TABLE simulation.positions ADD COLUMN unrealized_pnl FLOAT;
+                END IF;
+            END $$;
         """))
         conn.execute(text("""
             CREATE TABLE IF NOT EXISTS simulation.stats (
@@ -751,16 +801,19 @@ def upsert_simulation_position(strategy_name: str, position_data: dict) -> None:
     with engine.begin() as conn:
         conn.execute(text("""
             INSERT INTO simulation.positions (
-                strategy_name, entry_time, direction, entry_price, quantity, tp_price, sl_price, status
+                strategy_name, trade_id, entry_time, direction, entry_price, quantity, tp_price, sl_price, current_price, unrealized_pnl, status
             ) VALUES (
-                :strategy_name, :entry_time, :direction, :entry_price, :quantity, :tp_price, :sl_price, :status
+                :strategy_name, :trade_id, :entry_time, :direction, :entry_price, :quantity, :tp_price, :sl_price, :current_price, :unrealized_pnl, :status
             ) ON CONFLICT (strategy_name) DO UPDATE SET
+                trade_id = EXCLUDED.trade_id,
                 entry_time = EXCLUDED.entry_time,
                 direction = EXCLUDED.direction,
                 entry_price = EXCLUDED.entry_price,
                 quantity = EXCLUDED.quantity,
                 tp_price = EXCLUDED.tp_price,
                 sl_price = EXCLUDED.sl_price,
+                current_price = EXCLUDED.current_price,
+                unrealized_pnl = EXCLUDED.unrealized_pnl,
                 status = EXCLUDED.status
         """), {
             "strategy_name": strategy_name,

@@ -42,6 +42,20 @@ def get_current_balance(strategy_name: str, initial_balance: float) -> float:
         pass
     return round(initial_balance, 4)
 
+def _next_trade_id(strategy_name: str) -> int:
+    """Return the next trade_id for the strategy by counting existing ledger rows."""
+    from utils.db import get_engine
+    from sqlalchemy import text
+    engine = get_engine()
+    schema = 'backtest_ledgers'
+    table = f"{strategy_name.lower()}"
+    try:
+        with engine.connect() as conn:
+            row = conn.execute(text(f"SELECT COUNT(*) FROM {schema}.{table}")).fetchone()
+            return (row[0] or 0) + 1
+    except Exception:
+        return 1
+
 def calculate_lookback_start(config: dict, indicators_config: dict) -> str:
     from utils.intervals import INTERVAL_DELTAS
     time_horizon = config.get('timehorizon', '1m')
@@ -58,7 +72,7 @@ def calculate_lookback_start(config: dict, indicators_config: dict) -> str:
     start_dt = (datetime.now(timezone.utc) - total_duration).strftime("%Y-%m-%d")
     return start_dt
 
-def _update_simulation_stats(strategy_name: str, balance: float):
+def _update_simulation_stats(strategy_name: str, balance: float, sim_config: dict):
     from utils.db import get_engine
     import pandas as pd
     engine = get_engine()
@@ -68,8 +82,16 @@ def _update_simulation_stats(strategy_name: str, balance: float):
             stats = {'final_balance': round(balance, 4), 'total_trades': 0, 'sharpe_ratio': 0.0, 'max_drawdown': 0.0, 'win_rate': 0.0}
         else:
             ledger['exit_time'] = pd.to_datetime(ledger['exit_time'])
-            ledger = ledger.sort_values('exit_time')
-            returns = ledger['balance_after_trade'].pct_change().dropna()
+            ledger = ledger.sort_values('exit_time').set_index('exit_time')
+            initial_balance = sim_config.get('initial_balance', 10000.0)
+            first_time = ledger.index[0]
+            initial_time = first_time - pd.Timedelta(minutes=1)
+            balances = pd.concat([
+                pd.Series([initial_balance], index=[initial_time]),
+                ledger['balance_after_trade']
+            ]).sort_index()
+
+            returns = balances.pct_change().dropna()
             
             from stats.metrics import calculate_metrics
             metrics = calculate_metrics(returns) if not returns.empty else {}
@@ -78,7 +100,7 @@ def _update_simulation_stats(strategy_name: str, balance: float):
                 'final_balance': round(balance, 4),
                 'total_trades': len(ledger),
                 'sharpe_ratio': round(metrics.get('sharpe_ratio') or 0.0, 4),
-                'max_drawdown': round(metrics.get('max_drawdown') or 0.0, 4),
+                'max_drawdown': round(metrics.get('max_drawdown') or 0.0, 6),
                 'win_rate': round(metrics.get('win_rate') or 0.0, 4)
             }
         upsert_simulation_stats(strategy_name, stats)
@@ -180,6 +202,7 @@ def simulate_strategy(strategy_name: str, strategy_config: dict, exchange: str, 
             balance = _update_balance(balance, net)
             
             ledger_row = pd.DataFrame([{
+                'trade_id': pos.get('trade_id'),
                 'entry_time': pos['entry_time'],
                 'exit_time': current_time,
                 'direction': pos['direction'],
@@ -198,12 +221,15 @@ def simulate_strategy(strategy_name: str, strategy_config: dict, exchange: str, 
             
             pos['status'] = 'Closed'
             sim_pos = {
+                'trade_id': pos.get('trade_id'),
                 'entry_time': pos['entry_time'],
                 'direction': pos['direction'],
                 'entry_price': round(pos['entry_price'], 4),
                 'quantity': round(pos['quantity'], 4),
                 'tp_price': round(pos.get('take_profit'), 4) if pos.get('take_profit') is not None else None,
                 'sl_price': round(pos.get('stop_loss'), 4) if pos.get('stop_loss') is not None else None,
+                'current_price': round(float(exit_price), 4),
+                'unrealized_pnl': 0.0,
                 'status': pos['status']
             }
             upsert_simulation_position(strategy_name, sim_pos)
@@ -220,12 +246,15 @@ def simulate_strategy(strategy_name: str, strategy_config: dict, exchange: str, 
             pos['current_price'] = round(float(current_price), 4)
             pos['unrealized_pnl'] = round(float(unrealized), 4)
             sim_pos = {
+                'trade_id': pos.get('trade_id'),
                 'entry_time': pos['entry_time'],
                 'direction': pos['direction'],
                 'entry_price': round(pos['entry_price'], 4),
                 'quantity': round(pos['quantity'], 4),
                 'tp_price': round(pos.get('take_profit'), 4) if pos.get('take_profit') is not None else None,
                 'sl_price': round(pos.get('stop_loss'), 4) if pos.get('stop_loss') is not None else None,
+                'current_price': pos['current_price'],
+                'unrealized_pnl': pos['unrealized_pnl'],
                 'status': pos['status']
             }
             upsert_simulation_position(strategy_name, sim_pos)
@@ -270,6 +299,7 @@ def simulate_strategy(strategy_name: str, strategy_config: dict, exchange: str, 
             balance = _update_balance(balance, net)
             
             ledger_row = pd.DataFrame([{
+                'trade_id': pos.get('trade_id'),
                 'entry_time': pos['entry_time'],
                 'exit_time': current_time,
                 'direction': pos['direction'],
@@ -287,12 +317,15 @@ def simulate_strategy(strategy_name: str, strategy_config: dict, exchange: str, 
             save_ledger(ledger_row, strategy_name, if_exists='append')
             pos['status'] = 'Closed'
             sim_pos = {
+                'trade_id': pos.get('trade_id'),
                 'entry_time': pos['entry_time'],
                 'direction': pos['direction'],
                 'entry_price': round(pos['entry_price'], 4),
                 'quantity': round(pos['quantity'], 4),
                 'tp_price': round(pos.get('take_profit'), 4) if pos.get('take_profit') is not None else None,
                 'sl_price': round(pos.get('stop_loss'), 4) if pos.get('stop_loss') is not None else None,
+                'current_price': round(float(exit_price), 4),
+                'unrealized_pnl': 0.0,
                 'status': pos['status']
             }
             upsert_simulation_position(strategy_name, sim_pos)
@@ -301,11 +334,13 @@ def simulate_strategy(strategy_name: str, strategy_config: dict, exchange: str, 
             
     if not pos:
         def open_pos(direction):
+            trade_id = _next_trade_id(strategy_name)
             entry_price = _calculate_entry_price(config, current_price)
             qty = _calculate_position_size(config, balance, entry_price)
             tp, sl = _calculate_exit_conditions(config, direction, entry_price)
             
             new_pos = {
+                'trade_id': trade_id,
                 'direction': 'long' if direction == 1 else 'short',
                 'entry_time': current_time,
                 'entry_price': round(float(entry_price), 4),
@@ -317,12 +352,15 @@ def simulate_strategy(strategy_name: str, strategy_config: dict, exchange: str, 
                 'status': 'Open'
             }
             sim_pos = {
+                'trade_id': new_pos['trade_id'],
                 'entry_time': new_pos['entry_time'],
                 'direction': new_pos['direction'],
                 'entry_price': new_pos['entry_price'],
                 'quantity': new_pos['quantity'],
                 'tp_price': new_pos['take_profit'],
                 'sl_price': new_pos['stop_loss'],
+                'current_price': new_pos['current_price'],
+                'unrealized_pnl': new_pos['unrealized_pnl'],
                 'status': new_pos['status']
             }
             upsert_simulation_position(strategy_name, sim_pos)
@@ -334,4 +372,4 @@ def simulate_strategy(strategy_name: str, strategy_config: dict, exchange: str, 
             open_pos(-1)
             
     # Update Stats
-    _update_simulation_stats(strategy_name, balance)
+    _update_simulation_stats(strategy_name, balance, sim_config)

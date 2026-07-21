@@ -2,7 +2,7 @@ import logging
 import os
 from simulator.simulator import simulate_strategy
 from utils.config import load_config
-from utils.db import load_backtest_config
+from utils.db import load_backtest_config, load_strategies_config
 
 def setup_logging():
     log_dir = "logs"
@@ -23,15 +23,16 @@ def run_simulator():
     logger = logging.getLogger(__name__)
     
     sim_config = load_config("simulator/config.yaml")
-    strategies = load_config("signals/config.yaml")
-    
-    exchange = sim_config.get('exchange', 'binance')
-    symbol = sim_config.get('symbol', 'BTC')
-    
+    strategies = load_strategies_config()
     all_bt_configs = load_backtest_config()
     
-    for strategy_name, strategy_config in strategies.items():
-        time_horizon = strategy_config.get('timehorizon', '1m')
+    for strategy in strategies:
+        strategy_name = strategy['strategy_name']
+        strategy_config = strategy['config']
+        exchange = strategy_config['exchange']
+        symbol = strategy_config['symbol']
+        time_horizon = strategy_config['timehorizon']
+
         try:
             simulate_strategy(strategy_name, strategy_config, exchange, symbol, time_horizon, sim_config, all_bt_configs)
         except Exception as e:

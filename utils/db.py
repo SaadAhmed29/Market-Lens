@@ -188,14 +188,13 @@ def create_all_tables() -> None:
     engine.dispose()
     print("[v] Schemas and tables ensured for both exchanges in Market-Lens database.")
 
-def save_ledger(ledger_df: pd.DataFrame, strategy_name: str, if_exists: str = 'replace') -> None:
-    """Save backtest ledger to the backtest_ledgers schema, replacing any existing table."""
+def save_ledger(ledger_df: pd.DataFrame, strategy_name: str, if_exists: str = 'replace', schema: str = 'backtest_ledgers', table_suffix: str = '') -> None:
+    """Save backtest ledger to the specified schema, replacing any existing table."""
     if ledger_df is None or ledger_df.empty:
         return
         
     engine = get_engine()
-    schema = 'backtest_ledgers'
-    table = f"{strategy_name.lower()}"
+    table = f"{strategy_name.lower()}{table_suffix}"
     
     with engine.begin() as conn:
         conn.execute(text(f"CREATE SCHEMA IF NOT EXISTS {schema}"))

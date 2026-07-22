@@ -32,14 +32,39 @@ from signals.main import get_signal_df, _extract_indicators_for_strategy
 from backtest.backtest import (
     _calculate_position_size, _calculate_exit_conditions, _calculate_entry_price
 )
-from stats.main import generate_stats
+
+
+from decimal import Decimal, ROUND_DOWN
+
+_qty_step_cache = {}
+
+def get_qty_step(sym: str) -> tuple[float, float]:
+    """Returns (qty_step, min_order_qty) for a linear symbol, cached per run."""
+    if sym in _qty_step_cache:
+        return _qty_step_cache[sym]
+    resp = client.get_instruments_info(category="linear", symbol=sym)
+    info = resp["result"]["list"][0]
+    lot_filter = info["lotSizeFilter"]
+    qty_step = float(lot_filter["qtyStep"])
+    min_qty = float(lot_filter["minOrderQty"])
+    _qty_step_cache[sym] = (qty_step, min_qty)
+    return qty_step, min_qty
+
+
+def round_qty_to_step(qty: float, qty_step: float) -> float:
+    """Rounds DOWN to the nearest valid step (never rounds up past what's affordable)."""
+    step = Decimal(str(qty_step))
+    q = Decimal(str(qty))
+    rounded = (q // step) * step
+    return float(rounded)
+
 
 # Initialize pybit client
 api_key = os.getenv("BYBIT_API_KEY")
 api_secret = os.getenv("BYBIT_API_SECRET")
 client = None
 if api_key and api_secret:
-    client = HTTP(testnet=False, demo=True, api_key=api_key, api_secret=api_secret)
+    client = HTTP(testnet=False, demo=True, api_key=api_key, api_secret=api_secret, timeout=10,)
 else:
     logger.warning("BYBIT_API_KEY and BYBIT_API_SECRET not set in .env. Order placement will fail.")
 
@@ -80,17 +105,57 @@ def update_execution_stats(strategy_name: str, balance: float):
     engine = get_engine()
     try:
         ledger = pd.read_sql(f"SELECT * FROM execution_ledgers.{strategy_name.lower()}", engine)
+        
+        SCALAR_METRIC_KEYS = [
+            'sharpe_ratio', 'sortino_ratio', 'calmar_ratio', 'max_drawdown', 'cagr',
+            'volatility', 'win_rate', 'profit_factor', 'average_win', 'average_loss',
+            'best_day', 'worst_day', 'var', 'cvar', 'skewness', 'kurtosis',
+            'recovery_factor', 'ulcer_index', 'avg_return', 'common_sense_ratio',
+            'comp', 'conditional_value_at_risk', 'cpc_index', 'expected_return',
+            'expected_shortfall', 'exposure', 'gain_to_pain_ratio', 'geometric_mean',
+            'ghpr', 'outlier_loss_ratio', 'outlier_win_ratio', 'payoff_ratio',
+            'profit_ratio', 'rar', 'risk_of_ruin', 'ror', 'tail_ratio',
+            'ulcer_performance_index', 'upi', 'win_loss_ratio', 'kelly_criterion',
+            'risk_return_ratio',
+        ]
+        
         if ledger.empty:
             stats = {'final_balance': round(balance, 4), 'total_trades': 0}
-            upsert_execution_stats(strategy_name, stats)
-            return
+            stats.update({k: 0.0 for k in SCALAR_METRIC_KEYS})
+            stats['consecutive_losses'] = 0
+            stats['consecutive_wins'] = 0
+        else:
+            ledger['exit_time'] = pd.to_datetime(ledger['exit_time'])
+            ledger = ledger.sort_values('exit_time').set_index('exit_time')
             
-        metrics = generate_stats(ledger, strategy_name)
-        if metrics:
-            stats = {**metrics}
-            stats['final_balance'] = round(balance, 4)
-            stats['total_trades'] = len(ledger)
-            upsert_execution_stats(strategy_name, stats)
+            # Use the first balance_after_trade minus its net_pnl to get the initial balance before the first trade
+            initial_balance = ledger['balance_after_trade'].iloc[0] - ledger['net_pnl'].iloc[0]
+            if initial_balance <= 0:
+                initial_balance = 10000.0 # Fallback
+                
+            first_time = ledger.index[0]
+            initial_time = first_time - pd.Timedelta(minutes=1)
+            balances = pd.concat([
+                pd.Series([initial_balance], index=[initial_time]),
+                ledger['balance_after_trade']
+            ]).sort_index()
+
+            returns = balances.pct_change().dropna()
+            
+            from stats.metrics import calculate_metrics
+            metrics = calculate_metrics(returns) if not returns.empty else {}
+
+            stats = {
+                'final_balance': round(balance, 4),
+                'total_trades': len(ledger),
+                'consecutive_losses': int(metrics.get('consecutive_losses') or 0),
+                'consecutive_wins': int(metrics.get('consecutive_wins') or 0),
+            }
+            for key in SCALAR_METRIC_KEYS:
+                decimals = 6 if key == 'max_drawdown' else 4
+                stats[key] = round(metrics.get(key) or 0.0, decimals)
+
+        upsert_execution_stats(strategy_name, stats)
     except Exception as e:
         logger.error(f"Failed to update execution stats for {strategy_name}: {e}")
 
@@ -156,7 +221,10 @@ def execute_strategy(strategy_name: str, strategy_config: dict, exchange: str, s
     current_time = df_1m.index[-1]
     
     pos = get_open_execution_position(strategy_name)
+
+    logger.info("Testing authentication...")
     balance = get_real_wallet_balance()
+    logger.info(balance)
     
     retries = fetcher_cfg.get('retries', 3)
     
@@ -165,13 +233,15 @@ def execute_strategy(strategy_name: str, strategy_config: dict, exchange: str, s
             try:
                 if not client:
                     raise ValueError("Bybit client not initialized")
-                    
-                resp = client.get_positions(category="linear", symbol=symbol)
+
+                sym = symbol + "USDT"
+                
+                resp = client.get_positions(category="linear", symbol=sym)
                 pos_list = resp.get("result", {}).get("list", [])
                 
                 api_pos = None
                 for p in pos_list:
-                    if p['symbol'] == symbol and float(p['size']) > 0:
+                    if p['symbol'] == sym and float(p['size']) > 0:
                         api_pos = p
                         break
                 
@@ -180,7 +250,7 @@ def execute_strategy(strategy_name: str, strategy_config: dict, exchange: str, s
                     closed = True
                     
                 if closed:
-                    closed_resp = client.get_closed_pnl(category="linear", symbol=symbol, limit=1)
+                    closed_resp = client.get_closed_pnl(category="linear", symbol=sym, limit=1)
                     closed_list = closed_resp.get("result", {}).get("list", [])
                     
                     realized_pnl = 0.0
@@ -268,30 +338,57 @@ def execute_strategy(strategy_name: str, strategy_config: dict, exchange: str, s
     
     if not pos:
         def place_live_order(direction):
+            logger.info("Entered place_live_order")
+
             entry_price = _calculate_entry_price(config, current_price)
+            logger.info(f"entry_price={entry_price}")
+
             qty = _calculate_position_size(config, balance, entry_price)
+            logger.info(f"qty={qty}")
+
             tp, sl = _calculate_exit_conditions(config, direction, entry_price)
-            
+            logger.info(f"tp={tp}, sl={sl}")
+
             side = "Buy" if direction == 1 else "Sell"
-            
+            logger.info("About to place order")
+
+            sym = symbol + "USDT"
+
+            qty_step, min_qty = get_qty_step(sym)
+            qty = round_qty_to_step(qty, qty_step)
+
+            if qty < min_qty:
+                logger.error(f"[{strategy_name}] Computed qty {qty} is below Bybit's minimum order qty {min_qty} for {sym}. Skipping order.")
+                return
+
             try:
                 if not client:
                     raise ValueError("Bybit client not initialized")
-                    
+
+                logger.info("Calling place_order...")
+                
+                logger.info(
+                    f"symbol={sym}, side={side}, qty={qty}, "
+                    f"entry_price={entry_price}, category=linear"
+                )
                 order_resp = client.place_order(
                     category="linear",
-                    symbol=symbol,
+                    symbol=sym,
                     side=side,
                     orderType="Market",
                     qty=str(round(qty, 4))
                 )
+
+                logger.info("place_order returned")
+                logger.info(order_resp)
+
                 order_id = order_resp.get("result", {}).get("orderId")
                 
                 if order_id:
                     if not np.isnan(tp) or not np.isnan(sl):
                         client.set_trading_stop(
                             category="linear",
-                            symbol=symbol,
+                            symbol=sym,
                             takeProfit=str(round(tp, 4)) if not np.isnan(tp) else "0",
                             stopLoss=str(round(sl, 4)) if not np.isnan(sl) else "0",
                             tpslMode="Full",

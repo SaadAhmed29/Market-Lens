@@ -1,7 +1,7 @@
 import logging
 import os
 from execution.execution import execute_strategy
-from utils.config import load_strategies_config, load_backtest_config
+from utils.db import load_strategies_config, load_backtest_config
 
 def setup_logging():
     log_dir = "logs"

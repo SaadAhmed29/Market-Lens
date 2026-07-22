@@ -2,6 +2,8 @@ sample_strategy:
   timehorizon: 5m
   exchange: binance
   symbol: BTC
+  allow_simulation: true
+  allow_execution: true
   long:
     rule: AND
     conditions:
@@ -37,12 +39,13 @@ sample_strategy:
         operator: cross_below
         right: ind_MACD_SIGNAL_12_26_9
         persist_bars: 5
-
 
 my_strategy:
   timehorizon: 5m
   exchange: binance
   symbol: BTC
+  allow_simulation: true
+  allow_execution: true
   long:
     rule: AND
     conditions:
@@ -59,11 +62,12 @@ my_strategy:
         right: ind_SMA_10
         persist_bars: 2
 
-
 rsi_strategy:
   timehorizon: 5m
   exchange: binance
   symbol: BTC
+  allow_simulation: true
+  allow_execution: true
   long:
     rule: AND
     conditions:
@@ -80,11 +84,12 @@ rsi_strategy:
         right: 70
         persist_bars: 2
 
-
 macd_strategy:
   timehorizon: 5m
   exchange: binance
   symbol: BTC
+  allow_simulation: true
+  allow_execution: true
   long:
     rule: AND
     conditions:
@@ -101,11 +106,12 @@ macd_strategy:
         right: ind_MACD_SIGNAL_12_26_9
         persist_bars: 2
 
-
 doji_strategy:
   timehorizon: 5m
   exchange: binance
   symbol: BTC
+  allow_simulation: true
+  allow_execution: true
   long:
     rule: AND
     conditions:
@@ -128,11 +134,12 @@ doji_strategy:
         operator: "<"
         right: open
 
-
 sma_strategy:
   timehorizon: 5m
   exchange: binance
   symbol: BTC
+  allow_simulation: true
+  allow_execution: true
   long:
     rule: AND
     conditions:
@@ -148,3 +155,547 @@ sma_strategy:
         operator: cross_below
         right: close
         persist_bars: 0
+
+# DOGE
+
+doge_ema_crossover:
+  timehorizon: 5m
+  exchange: bybit
+  symbol: DOGE
+  allow_simulation: true
+  allow_execution: true
+  long:
+    rule: AND
+    conditions:
+      - left: ind_EMA_20
+        operator: cross_above
+        right: ind_EMA_50
+        persist_bars: 3
+  short:
+    rule: AND
+    conditions:
+      - left: ind_EMA_20
+        operator: cross_below
+        right: ind_EMA_50
+        persist_bars: 3
+
+doge_rsi_reversal:
+  timehorizon: 5m
+  exchange: bybit
+  symbol: DOGE
+  allow_simulation: true
+  allow_execution: true
+  long:
+    rule: AND
+    conditions:
+      - left: ind_RSI_14
+        operator: "<"
+        right: 30
+        persist_bars: 2
+  short:
+    rule: AND
+    conditions:
+      - left: ind_RSI_14
+        operator: ">"
+        right: 70
+        persist_bars: 2
+
+doge_macd_signal:
+  timehorizon: 5m
+  exchange: bybit
+  symbol: DOGE
+  allow_simulation: true
+  allow_execution: true
+  long:
+    rule: AND
+    conditions:
+      - left: ind_MACD_12_26_9
+        operator: cross_above
+        right: ind_MACD_SIGNAL_12_26_9
+        persist_bars: 2
+  short:
+    rule: AND
+    conditions:
+      - left: ind_MACD_12_26_9
+        operator: cross_below
+        right: ind_MACD_SIGNAL_12_26_9
+        persist_bars: 2
+
+# SOL
+
+sol_ema_rsi_combo:
+  timehorizon: 5m
+  exchange: bybit
+  symbol: SOL
+  allow_simulation: true
+  allow_execution: true
+  long:
+    rule: AND
+    conditions:
+      - left: ind_EMA_20
+        operator: cross_above
+        right: ind_EMA_50
+        persist_bars: 3
+      - left: ind_RSI_14
+        operator: "<"
+        right: 40
+        persist_bars: 1
+  short:
+    rule: AND
+    conditions:
+      - left: ind_EMA_20
+        operator: cross_below
+        right: ind_EMA_50
+        persist_bars: 3
+      - left: ind_RSI_14
+        operator: ">"
+        right: 60
+        persist_bars: 1
+
+sol_sma_crossover:
+  timehorizon: 5m
+  exchange: bybit
+  symbol: SOL
+  allow_simulation: true
+  allow_execution: true
+  long:
+    rule: AND
+    conditions:
+      - left: close
+        operator: cross_above
+        right: ind_SMA_20
+        persist_bars: 2
+  short:
+    rule: AND
+    conditions:
+      - left: close
+        operator: cross_below
+        right: ind_SMA_20
+        persist_bars: 2
+
+sol_macd_momentum:
+  timehorizon: 5m
+  exchange: bybit
+  symbol: SOL
+  allow_simulation: true
+  allow_execution: true
+  long:
+    rule: AND
+    conditions:
+      - left: ind_MACD_12_26_9
+        operator: cross_above
+        right: ind_MACD_SIGNAL_12_26_9
+        persist_bars: 3
+  short:
+    rule: AND
+    conditions:
+      - left: ind_MACD_12_26_9
+        operator: cross_below
+        right: ind_MACD_SIGNAL_12_26_9
+        persist_bars: 3
+
+# BTC
+
+btc_bybit_ema_trend:
+  timehorizon: 5m
+  exchange: bybit
+  symbol: BTC
+  allow_simulation: true
+  allow_execution: true
+  long:
+    rule: AND
+    conditions:
+      - left: ind_EMA_20
+        operator: cross_above
+        right: ind_EMA_50
+        persist_bars: 5
+  short:
+    rule: AND
+    conditions:
+      - left: ind_EMA_20
+        operator: cross_below
+        right: ind_EMA_50
+        persist_bars: 5
+
+btc_bybit_rsi_macd:
+  timehorizon: 5m
+  exchange: bybit
+  symbol: BTC
+  allow_simulation: true
+  allow_execution: true
+  long:
+    rule: AND
+    conditions:
+      - left: ind_RSI_14
+        operator: "<"
+        right: 35
+        persist_bars: 1
+      - left: ind_MACD_12_26_9
+        operator: cross_above
+        right: ind_MACD_SIGNAL_12_26_9
+        persist_bars: 2
+  short:
+    rule: AND
+    conditions:
+      - left: ind_RSI_14
+        operator: ">"
+        right: 65
+        persist_bars: 1
+      - left: ind_MACD_12_26_9
+        operator: cross_below
+        right: ind_MACD_SIGNAL_12_26_9
+        persist_bars: 2
+
+btc_bybit_sma_close:
+  timehorizon: 5m
+  exchange: bybit
+  symbol: BTC
+  allow_simulation: true
+  allow_execution: true
+  long:
+    rule: AND
+    conditions:
+      - left: close
+        operator: cross_above
+        right: ind_SMA_20
+        persist_bars: 0
+  short:
+    rule: AND
+    conditions:
+      - left: close
+        operator: cross_below
+        right: ind_SMA_20
+        persist_bars: 0
+
+# ETH
+
+eth_ema_breakout:
+  timehorizon: 5m
+  exchange: bybit
+  symbol: ETH
+  allow_simulation: true
+  allow_execution: true
+  long:
+    rule: AND
+    conditions:
+      - left: ind_EMA_20
+        operator: cross_above
+        right: ind_EMA_50
+        persist_bars: 4
+  short:
+    rule: AND
+    conditions:
+      - left: ind_EMA_20
+        operator: cross_below
+        right: ind_EMA_50
+        persist_bars: 4
+
+eth_rsi_oversold:
+  timehorizon: 5m
+  exchange: bybit
+  symbol: ETH
+  allow_simulation: true
+  allow_execution: true
+  long:
+    rule: AND
+    conditions:
+      - left: ind_RSI_14
+        operator: "<"
+        right: 30
+        persist_bars: 2
+  short:
+    rule: AND
+    conditions:
+      - left: ind_RSI_14
+        operator: ">"
+        right: 70
+        persist_bars: 2
+
+eth_macd_cross:
+  timehorizon: 5m
+  exchange: bybit
+  symbol: ETH
+  allow_simulation: true
+  allow_execution: true
+  long:
+    rule: AND
+    conditions:
+      - left: ind_MACD_12_26_9
+        operator: cross_above
+        right: ind_MACD_SIGNAL_12_26_9
+        persist_bars: 2
+  short:
+    rule: AND
+    conditions:
+      - left: ind_MACD_12_26_9
+        operator: cross_below
+        right: ind_MACD_SIGNAL_12_26_9
+        persist_bars: 2
+
+# ADA
+
+ada_ema_trend_follow:
+  timehorizon: 5m
+  exchange: bybit
+  symbol: ADA
+  allow_simulation: true
+  allow_execution: true
+  long:
+    rule: AND
+    conditions:
+      - left: ind_EMA_20
+        operator: cross_above
+        right: ind_EMA_50
+        persist_bars: 3
+  short:
+    rule: AND
+    conditions:
+      - left: ind_EMA_20
+        operator: cross_below
+        right: ind_EMA_50
+        persist_bars: 3
+
+ada_rsi_momentum:
+  timehorizon: 5m
+  exchange: bybit
+  symbol: ADA
+  allow_simulation: true
+  allow_execution: true
+  long:
+    rule: AND
+    conditions:
+      - left: ind_RSI_14
+        operator: "<"
+        right: 35
+        persist_bars: 1
+  short:
+    rule: AND
+    conditions:
+      - left: ind_RSI_14
+        operator: ">"
+        right: 65
+        persist_bars: 1
+
+ada_sma_price_cross:
+  timehorizon: 5m
+  exchange: bybit
+  symbol: ADA
+  allow_simulation: true
+  allow_execution: true
+  long:
+    rule: AND
+    conditions:
+      - left: close
+        operator: cross_above
+        right: ind_SMA_20
+        persist_bars: 1
+  short:
+    rule: AND
+    conditions:
+      - left: close
+        operator: cross_below
+        right: ind_SMA_20
+        persist_bars: 1
+
+# LTC
+
+ltc_ema_macd_combo:
+  timehorizon: 5m
+  exchange: bybit
+  symbol: LTC
+  allow_simulation: true
+  allow_execution: true
+  long:
+    rule: AND
+    conditions:
+      - left: ind_EMA_20
+        operator: cross_above
+        right: ind_EMA_50
+        persist_bars: 3
+      - left: ind_MACD_12_26_9
+        operator: cross_above
+        right: ind_MACD_SIGNAL_12_26_9
+        persist_bars: 2
+  short:
+    rule: AND
+    conditions:
+      - left: ind_EMA_20
+        operator: cross_below
+        right: ind_EMA_50
+        persist_bars: 3
+      - left: ind_MACD_12_26_9
+        operator: cross_below
+        right: ind_MACD_SIGNAL_12_26_9
+        persist_bars: 2
+
+ltc_rsi_filter:
+  timehorizon: 5m
+  exchange: bybit
+  symbol: LTC
+  allow_simulation: true
+  allow_execution: true
+  long:
+    rule: AND
+    conditions:
+      - left: ind_RSI_14
+        operator: "<"
+        right: 30
+        persist_bars: 2
+  short:
+    rule: AND
+    conditions:
+      - left: ind_RSI_14
+        operator: ">"
+        right: 70
+        persist_bars: 2
+
+ltc_close_sma_breakout:
+  timehorizon: 5m
+  exchange: bybit
+  symbol: LTC
+  allow_simulation: true
+  allow_execution: true
+  long:
+    rule: AND
+    conditions:
+      - left: close
+        operator: cross_above
+        right: ind_SMA_20
+        persist_bars: 0
+  short:
+    rule: AND
+    conditions:
+      - left: close
+        operator: cross_below
+        right: ind_SMA_20
+        persist_bars: 0
+
+# MINA
+
+mina_ema_crossover:
+  timehorizon: 5m
+  exchange: bybit
+  symbol: MINA
+  allow_simulation: true
+  allow_execution: true
+  long:
+    rule: AND
+    conditions:
+      - left: ind_EMA_20
+        operator: cross_above
+        right: ind_EMA_50
+        persist_bars: 3
+  short:
+    rule: AND
+    conditions:
+      - left: ind_EMA_20
+        operator: cross_below
+        right: ind_EMA_50
+        persist_bars: 3
+
+mina_rsi_extreme:
+  timehorizon: 5m
+  exchange: bybit
+  symbol: MINA
+  allow_simulation: true
+  allow_execution: true
+  long:
+    rule: AND
+    conditions:
+      - left: ind_RSI_14
+        operator: "<"
+        right: 30
+        persist_bars: 2
+  short:
+    rule: AND
+    conditions:
+      - left: ind_RSI_14
+        operator: ">"
+        right: 70
+        persist_bars: 2
+
+mina_macd_trend:
+  timehorizon: 5m
+  exchange: bybit
+  symbol: MINA
+  allow_simulation: true
+  allow_execution: true
+  long:
+    rule: AND
+    conditions:
+      - left: ind_MACD_12_26_9
+        operator: cross_above
+        right: ind_MACD_SIGNAL_12_26_9
+        persist_bars: 2
+  short:
+    rule: AND
+    conditions:
+      - left: ind_MACD_12_26_9
+        operator: cross_below
+        right: ind_MACD_SIGNAL_12_26_9
+        persist_bars: 2
+
+# SUI
+
+sui_ema_momentum:
+  timehorizon: 5m
+  exchange: bybit
+  symbol: SUI
+  allow_simulation: true
+  allow_execution: true
+  long:
+    rule: AND
+    conditions:
+      - left: ind_EMA_20
+        operator: cross_above
+        right: ind_EMA_50
+        persist_bars: 3
+  short:
+    rule: AND
+    conditions:
+      - left: ind_EMA_20
+        operator: cross_below
+        right: ind_EMA_50
+        persist_bars: 3
+
+sui_rsi_bounce:
+  timehorizon: 5m
+  exchange: bybit
+  symbol: SUI
+  allow_simulation: true
+  allow_execution: true
+  long:
+    rule: AND
+    conditions:
+      - left: ind_RSI_14
+        operator: "<"
+        right: 30
+        persist_bars: 2
+  short:
+    rule: AND
+    conditions:
+      - left: ind_RSI_14
+        operator: ">"
+        right: 70
+        persist_bars: 2
+
+sui_sma_close_cross:
+  timehorizon: 5m
+  exchange: bybit
+  symbol: SUI
+  allow_simulation: true
+  allow_execution: true
+  long:
+    rule: AND
+    conditions:
+      - left: close
+        operator: cross_above
+        right: ind_SMA_20
+        persist_bars: 1
+  short:
+    rule: AND
+    conditions:
+      - left: close
+        operator: cross_below
+        right: ind_SMA_20
+        persist_bars: 1

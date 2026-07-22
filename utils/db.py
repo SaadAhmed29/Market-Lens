@@ -487,8 +487,8 @@ def create_backtest_config_table() -> None:
                 "slippage": 0.02,
                 "allow_long": True,
                 "allow_short": True,
-                "take_profit": {"enabled": True, "type": "percentage", "value": 2.0},
-                "stop_loss": {"enabled": True, "type": "percentage", "value": 1.0},
+                "take_profit": {"enabled": True, "type": "percentage", "value": 1.0},
+                "stop_loss": {"enabled": True, "type": "percentage", "value": 0.75},
                 "entry_price": {"method": "next_open"},
                 "exit_price": {"method": "next_open"},
                 "max_open_positions": 1

@@ -39,7 +39,7 @@ api_key = os.getenv("BYBIT_API_KEY")
 api_secret = os.getenv("BYBIT_API_SECRET")
 client = None
 if api_key and api_secret:
-    client = HTTP(testnet=False, api_key=api_key, api_secret=api_secret)
+    client = HTTP(testnet=False, demo=True, api_key=api_key, api_secret=api_secret)
 else:
     logger.warning("BYBIT_API_KEY and BYBIT_API_SECRET not set in .env. Order placement will fail.")
 

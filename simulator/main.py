@@ -33,6 +33,11 @@ def run_simulator():
         symbol = strategy_config['symbol']
         time_horizon = strategy_config['timehorizon']
 
+        sim_permission = strategy_config['allow_simulation']
+        if not sim_permission:
+            logger.info(f"Skipping {strategy_name} - not allowed for simulation")
+            continue
+
         try:
             simulate_strategy(strategy_name, strategy_config, exchange, symbol, time_horizon, sim_config, all_bt_configs)
         except Exception as e:

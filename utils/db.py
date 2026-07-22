@@ -10,6 +10,7 @@ from datetime import datetime
 import json
 import yaml
 import pandas as pd
+import numpy as np
 from dotenv import load_dotenv
 from sqlalchemy import create_engine, text, Column, Float, TIMESTAMP, MetaData, Table
 
@@ -892,7 +893,11 @@ def upsert_simulation_stats(strategy_name: str, stats_data: dict) -> None:
     """)
 
     params = {"strategy_name": strategy_name}
-    params.update({c: stats_data.get(c) for c in columns})
+    for c in columns:
+        val = stats_data.get(c)
+        if isinstance(val, (np.floating, np.integer)):
+            val = val.item()
+        params[c] = val
 
     with engine.begin() as conn:
         conn.execute(query, params)
@@ -1026,7 +1031,11 @@ def upsert_execution_stats(strategy_name: str, stats_data: dict) -> None:
     """)
 
     params = {"strategy_name": strategy_name}
-    params.update({c: stats_data.get(c) for c in columns})
+    for c in columns:
+        val = stats_data.get(c)
+        if isinstance(val, (np.floating, np.integer)):
+            val = val.item()
+        params[c] = val
 
     with engine.begin() as conn:
         conn.execute(query, params)

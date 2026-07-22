@@ -135,7 +135,6 @@ def execute_strategy(strategy_name: str, strategy_config: dict, exchange: str, s
         "retry_delay": 5
     }
     fetcher = DataFetcher(fetcher_cfg)
-    fetcher.download(symbol)
     
     df_1m, _ = DataFetcher.get_updated_df(
         exchange=exchange,

@@ -17,7 +17,7 @@ def fetch_binance(client, symbol: str, interval: str,
     start_ms = int(start_dt.timestamp() * 1000)
     end_ms = int(end_dt.timestamp() * 1000)
 
-    klines = client.get_historical_klines(
+    klines = client.futures_klines(
         symbol=api_symbol,
         interval=interval,
         start_str=start_ms,

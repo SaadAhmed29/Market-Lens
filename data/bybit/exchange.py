@@ -27,7 +27,7 @@ def fetch_bybit(client, symbol: str, interval: str,
         chunk_end = min(current_start + (1000 * delta_ms), end_ms)
 
         response = client.get_kline(
-            category="spot",
+            category="linear",
             symbol=api_symbol,
             interval=interval,
             start=current_start,

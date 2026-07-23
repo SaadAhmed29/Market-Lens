@@ -25,7 +25,7 @@ def main():
 
     # Prompt user for CLI inputs first, since we now need the strategy name
     # to look up which backtest_config row to use
-    options = ['strategy', 'exchange', 'symbols', 'start_date', 'end_date']
+    options = ['strategy', 'exchange', 'symbols', 'start_date', 'end_date', 'timehorizon']
     cli_config = run_cli(options)
 
     # Load backtest config from DB for parameters like initial_balance, position_size, take_profit, stop_loss

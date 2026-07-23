@@ -507,6 +507,6 @@ class BacktestEngine:
         if self.trade_ledger is not None and not self.trade_ledger.empty:
             self.trade_ledger = self.trade_ledger.sort_values('entry_time').reset_index(drop=True)
             results['trade_ledger'] = self.trade_ledger
-            save_ledger(self.trade_ledger, strategy_name)
+            save_ledger(self.trade_ledger, strategy_name, schema='backtest_ledgers', table_suffix='')
             
         return results

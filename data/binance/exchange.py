@@ -6,6 +6,7 @@ Fetches OHLCV candle data from the Binance API.
 from datetime import datetime, timezone
 
 import pandas as pd
+from binance.enums import HistoricalKlinesType
 
 
 def fetch_binance(client, symbol: str, interval: str,
@@ -17,11 +18,12 @@ def fetch_binance(client, symbol: str, interval: str,
     start_ms = int(start_dt.timestamp() * 1000)
     end_ms = int(end_dt.timestamp() * 1000)
 
-    klines = client.futures_klines(
+    klines = client.get_historical_klines(
         symbol=api_symbol,
         interval=interval,
         start_str=start_ms,
         end_str=end_ms,
+        klines_type=HistoricalKlinesType.FUTURES
     )
 
     if not klines:

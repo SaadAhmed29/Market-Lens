@@ -644,7 +644,7 @@ def run_cli(options: list[str], preset_exchange: str | None = None,
             result['symbols'] = syms
 
     # --- time_horizon ---
-    if 'time_horizon' in options:
+    if 'timehorizon' in options:
         th = questionary.select(
             "Select time horizon:",
             choices=db_config["time_horizons"],
@@ -652,7 +652,7 @@ def run_cli(options: list[str], preset_exchange: str | None = None,
         ).ask()
         if th is None:
             raise KeyboardInterrupt("Prompt cancelled.")
-        result['time_horizon'] = th
+        result['timehorizon'] = th
 
     # --- fill_missing_data ---
     if 'fill_missing_data' in options:

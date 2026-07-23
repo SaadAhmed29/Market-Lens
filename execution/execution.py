@@ -283,8 +283,7 @@ def execute_strategy(strategy_name: str, strategy_config: dict, exchange: str, s
                         'slippage': 0.0,
                         'net_pnl': round(realized_pnl, 4),
                         'balance_after_trade': round(balance, 4),
-                        'exit_reason': reason,
-                        'forced_exit': False
+                        'exit_reason': reason
                     }])
                     
                     save_ledger(ledger_row, strategy_name, if_exists='append', schema='execution_ledgers', table_suffix='')

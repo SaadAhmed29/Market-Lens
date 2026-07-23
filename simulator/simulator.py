@@ -232,10 +232,9 @@ def simulate_strategy(strategy_name: str, strategy_config: dict, exchange: str, 
                 'slippage': round(slip, 4),
                 'net_pnl': round(net, 4),
                 'balance_after_trade': round(balance, 4),
-                'exit_reason': reason,
-                'forced_exit': False
+                'exit_reason': reason
             }])
-            save_ledger(ledger_row, strategy_name, if_exists='append', schema='backtest_ledgers', table_suffix='')
+            save_ledger(ledger_row, strategy_name, if_exists='append', schema='simulation_ledgers', table_suffix='')
             
             pos['status'] = 'Closed'
             sim_pos = {
@@ -329,10 +328,9 @@ def simulate_strategy(strategy_name: str, strategy_config: dict, exchange: str, 
                 'slippage': round(slip, 4),
                 'net_pnl': round(net, 4),
                 'balance_after_trade': round(balance, 4),
-                'exit_reason': 'opposite signal',
-                'forced_exit': False
+                'exit_reason': 'opposite signal'
             }])
-            save_ledger(ledger_row, strategy_name, if_exists='append', schema='backtest_ledgers', table_suffix='')
+            save_ledger(ledger_row, strategy_name, if_exists='append', schema='simulation_ledgers', table_suffix='')
             pos['status'] = 'Closed'
             sim_pos = {
                 'trade_id': pos.get('trade_id'),

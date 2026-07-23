@@ -264,11 +264,19 @@ def execute_strategy(strategy_name: str, strategy_config: dict, exchange: str, s
                         entry_val = float(latest_close.get("cumEntryValue", 0))
                         exit_val = float(latest_close.get("cumExitValue", 0))
                         fee = (entry_val + exit_val) * config.get('commission', 0.0005)
-                        exit_price = float(latest_close.get("avgExitPrice", current_price))
+                        actual_entry_price = float(latest_close.get("avgEntryPrice", pos['entry_price']))
+                        actual_exit_price = float(latest_close.get("avgExitPrice", current_price))
+                        exit_price = actual_exit_price
+                        updated_time_ms = latest_close.get("updatedTime")
+                        if updated_time_ms:
+                            exit_time = pd.to_datetime(int(updated_time_ms), unit="ms", utc=True)
                     
                     balance = get_real_wallet_balance()
                     qty = pos['quantity']
-                    entry_price = pos['entry_price']
+                    entry_price = actual_entry_price
+                    entry_slippage = abs(actual_entry_price - pos['entry_price']) * qty
+                    exit_slippage = abs(actual_exit_price - exit_price) * qty  # will be 0 here since exit_price = actual_exit_price
+                    slippage = entry_slippage  # entry is really the only leg where your ledger had a *prediction* to compare against
                     
                     ledger_row = pd.DataFrame([{
                         'trade_id': pos.get('order_id'),
@@ -280,7 +288,7 @@ def execute_strategy(strategy_name: str, strategy_config: dict, exchange: str, s
                         'quantity': round(qty, 4),
                         'gross_pnl': round(realized_pnl + fee, 4),
                         'commission': round(fee, 4),
-                        'slippage': 0.0,
+                        'slippage': round(slippage, 4),
                         'net_pnl': round(realized_pnl, 4),
                         'balance_after_trade': round(balance, 4),
                         'exit_reason': reason

@@ -50,7 +50,33 @@ def run_execution():
             pass
             
         if open_pos:
-            logger.info(f"Skipping {symbol} - active position exists for strategy {open_pos[0]}")
+            # An open position exists for this symbol -- don't skip entirely.
+            # We still need to run that strategy so it can monitor/close the
+            # position (TP/SL hit, manually closed, etc.) and keep stats
+            # up to date. We just don't evaluate new entry signals for a
+            # *different* strategy on the same symbol while one is live.
+            monitoring_strategy_name = open_pos[0]
+            matching = [s for s in symbol_strategies if s['strategy_name'] == monitoring_strategy_name]
+
+            if not matching:
+                logger.warning(
+                    f"Open position found for {monitoring_strategy_name} but no "
+                    f"matching strategy config for {symbol}. Skipping."
+                )
+                continue
+
+            strategy_config = matching[0]['config']
+            exchange = strategy_config['exchange']
+            time_horizon = strategy_config['timehorizon']
+
+            logger.info(f"Monitoring open position for {monitoring_strategy_name} on {symbol}")
+            try:
+                execute_strategy(
+                    monitoring_strategy_name, strategy_config, exchange, symbol,
+                    time_horizon, all_bt_configs
+                )
+            except Exception as e:
+                logger.error(f"Error monitoring {monitoring_strategy_name}: {e}")
             continue
             
         stats_map = {}

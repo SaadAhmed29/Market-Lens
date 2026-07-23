@@ -1041,6 +1041,120 @@ def upsert_execution_stats(strategy_name: str, stats_data: dict) -> None:
         conn.execute(query, params)
 
 
+# Accounts schema
+
+def create_accounts_schema() -> None:
+    """Create the accounts schema and the api table.
+
+    Seeds the first row from .env (BYBIT_API_KEY / BYBIT_API_SECRET) when the
+    table is empty so existing single-account setups keep working.
+    """
+    engine = get_engine()
+    with engine.begin() as conn:
+        conn.execute(text("CREATE SCHEMA IF NOT EXISTS accounts"))
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS accounts.api (
+                account_name   TEXT PRIMARY KEY,
+                bybit_api_key  TEXT NOT NULL,
+                bybit_api_secret TEXT NOT NULL
+            )
+        """))
+
+        row_count = conn.execute(text("SELECT COUNT(*) FROM accounts.api")).scalar()
+        if row_count == 0:
+            key = os.getenv("BYBIT_API_KEY", "")
+            secret = os.getenv("BYBIT_API_SECRET", "")
+            if key and secret:
+                conn.execute(text("""
+                    INSERT INTO accounts.api (account_name, bybit_api_key, bybit_api_secret)
+                    VALUES (:name, :key, :secret)
+                    ON CONFLICT DO NOTHING
+                """), {"name": "main", "key": key, "secret": secret})
+    print("[v] accounts schema and api table ensured.")
+
+
+def create_account_history_table(account_name: str) -> None:
+    """Create accounts.{account_name}_history for raw Bybit execution records."""
+    table = f"{account_name.lower()}_history"
+    engine = get_engine()
+    with engine.begin() as conn:
+        conn.execute(text("CREATE SCHEMA IF NOT EXISTS accounts"))
+        conn.execute(text(f"""
+            CREATE TABLE IF NOT EXISTS accounts.{table} (
+                exec_id    TEXT PRIMARY KEY,
+                order_id   TEXT,
+                symbol     TEXT,
+                side       TEXT,
+                price      FLOAT,
+                qty        FLOAT,
+                fee        FLOAT,
+                fee_rate   FLOAT,
+                exec_time  TIMESTAMP WITH TIME ZONE,
+                order_type TEXT,
+                is_maker   BOOLEAN
+            )
+        """))
+
+
+def create_account_stats_table(account_name: str) -> None:
+    """Create accounts.{account_name}_stats as a single-row stats store."""
+    table = f"{account_name.lower()}_stats"
+    engine = get_engine()
+    with engine.begin() as conn:
+        conn.execute(text("CREATE SCHEMA IF NOT EXISTS accounts"))
+        conn.execute(text(f"""
+            CREATE TABLE IF NOT EXISTS accounts.{table} (
+                id                       INTEGER PRIMARY KEY DEFAULT 1,
+                last_updated             TIMESTAMP WITH TIME ZONE,
+                -- closed PnL stats
+                total_realized_pnl       FLOAT,
+                win_rate                 FLOAT,
+                avg_win                  FLOAT,
+                avg_loss                 FLOAT,
+                largest_win              FLOAT,
+                largest_loss             FLOAT,
+                profit_factor            FLOAT,
+                expectancy               FLOAT,
+                max_win_streak           INTEGER,
+                max_loss_streak          INTEGER,
+                avg_holding_time_seconds FLOAT,
+                trades_per_day           FLOAT,
+                pnl_by_symbol            JSONB,
+                pnl_by_side              JSONB,
+                pnl_by_hour              JSONB,
+                pnl_by_dow               JSONB,
+                -- execution stats
+                total_fees_paid          FLOAT,
+                total_volume_traded      FLOAT,
+                fees_pct_of_volume       FLOAT,
+                avg_trade_size           FLOAT,
+                maker_fill_ratio         FLOAT,
+                taker_fill_ratio         FLOAT,
+                real_slippage_avg        FLOAT,
+                -- order stats
+                fill_rate                FLOAT,
+                order_status_breakdown   JSONB,
+                order_type_breakdown     JSONB,
+                -- live snapshot
+                open_position_count      INTEGER,
+                total_notional_exposure  FLOAT,
+                total_unrealized_pnl     FLOAT,
+                wallet_balance           FLOAT,
+                available_balance        FLOAT
+            )
+        """))
+
+
+def load_api_credentials() -> list[dict]:
+    """Return all rows from accounts.api as a list of dicts."""
+    engine = get_engine()
+    with engine.connect() as conn:
+        rows = conn.execute(
+            text("SELECT account_name, bybit_api_key, bybit_api_secret FROM accounts.api")
+        ).mappings().fetchall()
+    return [dict(r) for r in rows]
+
+
 if __name__ == "__main__":
     create_all_tables()
 

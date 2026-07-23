@@ -1,4 +1,5 @@
 import os
+import atexit
 import sys
 import time
 import json
@@ -25,7 +26,8 @@ from sqlalchemy import text
 from utils.config import load_config
 from utils.db import (
     get_engine, save_ledger, load_backtest_config, load_strategies_config,
-    upsert_execution_position, upsert_execution_stats
+    upsert_execution_position, upsert_execution_stats,
+    create_accounts_schema, load_api_credentials
 )
 from data.data_downloader import DataFetcher
 from signals.main import get_signal_df, _extract_indicators_for_strategy
@@ -42,7 +44,7 @@ def get_qty_step(sym: str) -> tuple[float, float]:
     """Returns (qty_step, min_order_qty) for a linear symbol, cached per run."""
     if sym in _qty_step_cache:
         return _qty_step_cache[sym]
-    resp = client.get_instruments_info(category="linear", symbol=sym)
+    resp = get_client().get_instruments_info(category="linear", symbol=sym)
     info = resp["result"]["list"][0]
     lot_filter = info["lotSizeFilter"]
     qty_step = float(lot_filter["qtyStep"])
@@ -59,14 +61,34 @@ def round_qty_to_step(qty: float, qty_step: float) -> float:
     return float(rounded)
 
 
-# Initialize pybit client
-api_key = os.getenv("BYBIT_API_KEY")
-api_secret = os.getenv("BYBIT_API_SECRET")
-client = None
-if api_key and api_secret:
-    client = HTTP(testnet=False, demo=True, api_key=api_key, api_secret=api_secret, timeout=10,)
-else:
-    logger.warning("BYBIT_API_KEY and BYBIT_API_SECRET not set in .env. Order placement will fail.")
+# Lazy-initialised pybit client — credentials loaded from accounts.api
+_client = None
+
+def get_client():
+    """Return the cached pybit HTTP client, initialising it on first call.
+
+    Credentials are read from the ``accounts.api`` table (seeded from .env
+    on first run via ``create_accounts_schema``).
+    """
+    global _client
+    if _client is not None:
+        return _client
+
+    create_accounts_schema()          # idempotent; seeds from .env if table empty
+    creds = load_api_credentials()
+    if not creds:
+        logger.warning("No API credentials found in accounts.api. Order placement will fail.")
+        return None
+
+    # Use the first account ("main") by default
+    main = creds[0]
+    _client = HTTP(
+        testnet=False, demo=True,
+        api_key=main["bybit_api_key"],
+        api_secret=main["bybit_api_secret"],
+        timeout=10,
+    )
+    return _client
 
 def calculate_lookback_start(config: dict, indicators_config: dict) -> str:
     from utils.intervals import INTERVAL_DELTAS
@@ -161,8 +183,9 @@ def update_execution_stats(strategy_name: str, balance: float):
 
 def get_real_wallet_balance() -> float:
     try:
-        if not client: return 0.0
-        wallet_resp = client.get_wallet_balance(accountType="UNIFIED", coin="USDT")
+        c = get_client()
+        if not c: return 0.0
+        wallet_resp = c.get_wallet_balance(accountType="UNIFIED", coin="USDT")
         if wallet_resp.get("result", {}).get("list"):
             coins = wallet_resp["result"]["list"][0].get("coin", [])
             for c in coins:
@@ -231,12 +254,12 @@ def execute_strategy(strategy_name: str, strategy_config: dict, exchange: str, s
     if pos:
         for i in range(retries):
             try:
-                if not client:
+                if not get_client():
                     raise ValueError("Bybit client not initialized")
 
                 sym = symbol + "USDT"
                 
-                resp = client.get_positions(category="linear", symbol=sym)
+                resp = get_client().get_positions(category="linear", symbol=sym)
                 pos_list = resp.get("result", {}).get("list", [])
                 
                 api_pos = None
@@ -250,7 +273,7 @@ def execute_strategy(strategy_name: str, strategy_config: dict, exchange: str, s
                     closed = True
                     
                 if closed:
-                    closed_resp = client.get_closed_pnl(category="linear", symbol=sym, limit=1)
+                    closed_resp = get_client().get_closed_pnl(category="linear", symbol=sym, limit=1)
                     closed_list = closed_resp.get("result", {}).get("list", [])
                     
                     realized_pnl = 0.0
@@ -369,7 +392,7 @@ def execute_strategy(strategy_name: str, strategy_config: dict, exchange: str, s
                 return
 
             try:
-                if not client:
+                if not get_client():
                     raise ValueError("Bybit client not initialized")
 
                 logger.info("Calling place_order...")
@@ -378,7 +401,7 @@ def execute_strategy(strategy_name: str, strategy_config: dict, exchange: str, s
                     f"symbol={sym}, side={side}, qty={qty}, "
                     f"entry_price={entry_price}, category=linear"
                 )
-                order_resp = client.place_order(
+                order_resp = get_client().place_order(
                     category="linear",
                     symbol=sym,
                     side=side,
@@ -393,7 +416,7 @@ def execute_strategy(strategy_name: str, strategy_config: dict, exchange: str, s
                 
                 if order_id:
                     if not np.isnan(tp) or not np.isnan(sl):
-                        client.set_trading_stop(
+                        get_client().set_trading_stop(
                             category="linear",
                             symbol=sym,
                             takeProfit=str(round(tp, 4)) if not np.isnan(tp) else "0",

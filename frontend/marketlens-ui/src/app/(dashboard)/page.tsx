@@ -5,45 +5,57 @@ import { PageWrapper } from '@/components/layout/PageWrapper'
 import { StatCard } from '@/components/shared/StatCard'
 import { DataTable, Column } from '@/components/shared/DataTable'
 import { Badge } from '@/components/ui/badge'
-import { useDashboardStats } from '@/hooks/useDashboard'
-import { useStrategies } from '@/hooks/useStrategies'
-import { Strategy } from '@/types/strategy'
+import { EmptyState } from '@/components/shared/EmptyState'
+import { Skeleton } from '@/components/ui/skeleton'
+import { useDashboard, DashboardStrategy } from '@/hooks/useDashboard'
 
 export default function DashboardPage() {
     const router = useRouter()
-    const { data: stats, isLoading: statsLoading } = useDashboardStats()
-    const { data: strategies, isLoading: strategiesLoading } = useStrategies()
+    const { data: dashboard, isLoading, isError } = useDashboard()
 
-    const columns: Column<Strategy>[] = [
-        { header: 'NAME', accessorKey: 'name', className: 'text-accent' },
+    if (isError) {
+        return (
+            <PageWrapper title="DASHBOARD_OVERVIEW">
+                <EmptyState message="ERROR_FETCHING_DASHBOARD_DATA" />
+            </PageWrapper>
+        )
+    }
+
+    const columns: Column<DashboardStrategy>[] = [
+        { header: 'NAME', accessorKey: 'strategy_name', className: 'text-accent' },
         { header: 'SYMBOL', accessorKey: 'symbol' },
         { header: 'EXCHANGE', accessorKey: 'exchange' },
-        { header: 'TIMEFRAME', accessorKey: 'timeframe' },
-        { 
-            header: 'STATUS', 
+        { header: 'TIMEFRAME', accessorKey: 'timehorizon', className: 'text-center' },
+        { header: 'TOTAL_TRADES', accessorKey: 'total_trades', className: 'text-center' },
+        {
+            header: 'STATUS',
             cell: (row) => (
                 <Badge variant={
-                    row.status === 'ACTIVE' ? 'cyber-running' : 
-                    row.status === 'PAUSED' ? 'cyber-paused' : 'cyber-stopped'
+                    row.status.toUpperCase() === 'OPEN' || row.status.toUpperCase() === 'ACTIVE' ? 'cyber-running' :
+                        row.status.toUpperCase() === 'PAUSED' ? 'cyber-paused' : 'cyber-stopped'
                 }>
-                    {row.status}
+                    {row.status.toUpperCase()}
                 </Badge>
             )
         },
-        { 
-            header: 'LATEST_RETURN', 
+        {
+            header: 'LATEST_RETURN',
             cell: (row) => (
-                <span className={row.latestReturn > 0 ? 'text-accent' : 'text-destructive'}>
-                    {row.latestReturn > 0 ? '+' : ''}{row.latestReturn}%
+                <span className={row.latest_return > 0 ? 'text-accent' : row.latest_return < 0 ? 'text-destructive' : 'text-foreground'}>
+                    {row.latest_return > 0 ? '+' : ''}{row.latest_return.toFixed(5)}%
                 </span>
             ),
+            className: 'text-center'
+        },
+        {
+            header: 'SHARPE',
+            cell: (row) => row.sharpe_ratio.toFixed(2),
             className: 'text-right'
         },
-        { header: 'SHARPE', accessorKey: 'sharpeRatio', className: 'text-right' },
-        { 
-            header: 'WIN_RATE', 
-            cell: (row) => `${row.winRate}%`,
-            className: 'text-right' 
+        {
+            header: 'WIN_RATE',
+            cell: (row) => `${(row.win_rate * 100).toFixed(1)}%`,
+            className: 'text-right'
         },
     ]
 
@@ -51,50 +63,52 @@ export default function DashboardPage() {
         <PageWrapper title="DASHBOARD_OVERVIEW">
             {/* Top Stat Strip */}
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
-                <StatCard 
-                    label="TOTAL_STRATEGIES" 
-                    value={statsLoading ? '...' : stats?.totalStrategies || 0} 
-                />
-                <StatCard 
-                    label="ACTIVE_STRATEGIES" 
-                    value={statsLoading ? '...' : stats?.activeStrategies || 0} 
-                    className="border-accent/50"
-                />
-                <StatCard 
-                    label="RUNNING_EXECUTIONS" 
-                    value={statsLoading ? '...' : stats?.runningExecutions || 0} 
-                />
-                <StatCard 
-                    label="ML_MODELS" 
-                    value={statsLoading ? '...' : stats?.trainedMlModels || 0} 
-                />
-                <StatCard 
-                    label="TOTAL_BACKTESTS" 
-                    value={statsLoading ? '...' : stats?.totalBacktests || 0} 
-                />
-                <StatCard 
-                    label="CONNECTED_ACCOUNTS" 
-                    value={statsLoading ? '...' : stats?.connectedAccounts || 0} 
-                />
-                <StatCard 
-                    label="SIMULATIONS" 
-                    value={statsLoading ? '...' : stats?.runningSimulations || 0} 
-                />
-                <StatCard 
-                    label="PORTFOLIO_VALUE" 
-                    value={statsLoading ? '...' : `$${stats?.overallPortfolioValue.toLocaleString() || 0}`} 
-                />
-                <StatCard 
-                    label="TODAY_PNL" 
-                    value={statsLoading ? '...' : `$${stats?.todayPnl.toLocaleString() || 0}`} 
-                    isUp={stats?.todayPnl && stats.todayPnl >= 0 ? true : false}
-                    change={stats?.todayPnl ? `${(stats.todayPnl / (stats.overallPortfolioValue - stats.todayPnl) * 100).toFixed(2)}%` : '0.00%'}
-                />
-                <StatCard 
-                    label="TOTAL_RETURN" 
-                    value={statsLoading ? '...' : `${stats?.totalReturn || 0}%`} 
-                    isUp={stats?.totalReturn && stats.totalReturn >= 0 ? true : false}
-                />
+                {isLoading ? (
+                    Array.from({ length: 9 }).map((_, i) => (
+                        <Skeleton key={i} className="h-24 w-full bg-card cyber-chamfer border border-border" />
+                    ))
+                ) : dashboard && (
+                    <>
+                        <StatCard
+                            label="TOTAL_STRATEGIES"
+                            value={dashboard.total_strategies}
+                        />
+                        <StatCard
+                            label="ACTIVE_STRATEGIES"
+                            value={dashboard.active_strategies}
+                            className="border-accent/50"
+                        />
+                        <StatCard
+                            label="RUNNING_EXECUTIONS"
+                            value={dashboard.running_executions}
+                        />
+                        <StatCard
+                            label="SIMULATIONS"
+                            value={dashboard.running_simulations}
+                        />
+                        <StatCard
+                            label="CONNECTED_ACCOUNTS"
+                            value={dashboard.connected_accounts}
+                        />
+                        <StatCard
+                            label="ML_MODELS"
+                            value={dashboard.trained_ml_models}
+                        />
+                        <StatCard
+                            label="TOTAL_BACKTESTS"
+                            value={dashboard.total_backtests}
+                        />
+                        <StatCard
+                            label="PORTFOLIO_VALUE"
+                            value={`$${dashboard.portfolio_value.toLocaleString()}`}
+                        />
+                        <StatCard
+                            label="TOTAL_RETURN"
+                            value={`$${dashboard.total_return.toLocaleString()}`}
+                            isUp={dashboard.total_return >= 0}
+                        />
+                    </>
+                )}
             </div>
 
             {/* Strategy Table */}
@@ -103,11 +117,11 @@ export default function DashboardPage() {
                     <span className="text-accent">&gt;</span>
                     <h2 className="text-sm font-mono uppercase tracking-widest text-muted-foreground">ACTIVE_STRATEGIES_OVERVIEW</h2>
                 </div>
-                <DataTable 
-                    data={strategies || []} 
-                    columns={columns} 
-                    isLoading={strategiesLoading}
-                    onRowClick={(row) => router.push(`/strategies/${row.id}`)}
+                <DataTable
+                    data={dashboard?.strategies || []}
+                    columns={columns}
+                    isLoading={isLoading}
+                    onRowClick={(row) => router.push(`/strategies/${row.strategy_name}`)}
                 />
             </div>
         </PageWrapper>

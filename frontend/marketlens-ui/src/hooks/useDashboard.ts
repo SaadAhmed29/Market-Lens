@@ -1,31 +1,45 @@
 import { useQuery } from '@tanstack/react-query'
 import api from '@/lib/api'
-import { DashboardStats } from '@/types/dashboard'
 
-const MOCK_STATS: DashboardStats = {
-    totalStrategies: 24,
-    activeStrategies: 8,
-    runningExecutions: 3,
-    runningSimulations: 1,
-    connectedAccounts: 2,
-    trainedMlModels: 12,
-    totalBacktests: 142,
-    todayPnl: 5204.10,
-    overallPortfolioValue: 248190.42,
-    totalReturn: 24.5
+export interface DashboardStrategy {
+    strategy_name: string
+    symbol: string
+    exchange: string
+    timehorizon: string
+    total_trades: number
+    status: string
+    latest_return: number
+    sharpe_ratio: number
+    win_rate: number
 }
 
-export function useDashboardStats() {
+
+export interface DashboardData {
+    total_strategies: number
+    active_strategies: number
+    running_executions: number
+    running_simulations: number
+    connected_accounts: number
+    total_backtests: number
+    portfolio_value: number
+    total_return: number
+    trained_ml_models: number
+    strategies: DashboardStrategy[]
+}
+
+export interface DashboardResponse {
+    status: string
+    data: DashboardData
+}
+
+export const useDashboard = () => {
     return useQuery({
-        queryKey: ['dashboard-stats'],
+        queryKey: ['dashboard'],
         queryFn: async () => {
-            try {
-                const { data } = await api.get('/dashboard')
-                return data as DashboardStats
-            } catch (err) {
-                console.warn('Backend unavailable, using mock data for dashboard stats')
-                return MOCK_STATS
-            }
-        }
+            const response = await api.get<DashboardResponse>('/dashboard')
+            return response.data.data
+        },
+        staleTime: 30 * 1000,
+        refetchInterval: 60 * 1000,
     })
 }

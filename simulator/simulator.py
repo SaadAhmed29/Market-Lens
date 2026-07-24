@@ -30,7 +30,7 @@ def get_current_balance(strategy_name: str, initial_balance: float) -> float:
     from utils.db import get_engine
     from sqlalchemy import text
     engine = get_engine()
-    schema = 'backtest_ledgers'
+    schema = 'simulation_ledgers'
     table = f"{strategy_name.lower()}"
     try:
         with engine.connect() as conn:
@@ -47,7 +47,7 @@ def _next_trade_id(strategy_name: str) -> int:
     from utils.db import get_engine
     from sqlalchemy import text
     engine = get_engine()
-    schema = 'backtest_ledgers'
+    schema = 'simulation_ledgers'
     table = f"{strategy_name.lower()}"
     try:
         with engine.connect() as conn:
@@ -77,7 +77,7 @@ def _update_simulation_stats(strategy_name: str, balance: float, sim_config: dic
     import pandas as pd
     engine = get_engine()
     try:
-        ledger = pd.read_sql(f"SELECT * FROM backtest_ledgers.{strategy_name.lower()}", engine)
+        ledger = pd.read_sql(f"SELECT * FROM simulation_ledgers.{strategy_name.lower()}", engine)
         if ledger.empty:
             stats = {'final_balance': round(balance, 4), 'total_trades': 0}
             stats.update({k: 0.0 for k in _SCALAR_METRIC_KEYS})

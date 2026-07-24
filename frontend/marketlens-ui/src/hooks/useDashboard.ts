@@ -18,10 +18,11 @@ export interface DashboardData {
     total_strategies: number
     active_strategies: number
     running_executions: number
+    total_trades_executed: number
     running_simulations: number
+    total_trades_simulated: number
     connected_accounts: number
     total_backtests: number
-    portfolio_value: number
     total_return: number
     trained_ml_models: number
     strategies: DashboardStrategy[]

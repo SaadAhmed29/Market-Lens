@@ -53,7 +53,7 @@ export function AppSidebar() {
                             <span className="truncate text-lg font-heading font-bold tracking-widest text-accent cyber-glitch">
                                 MARKETLENS
                             </span>
-                            <span className="truncate text-[0.65rem] uppercase tracking-[0.3em] text-muted-foreground mt-1">
+                            <span className="truncate text-xs uppercase tracking-[0.3em] text-muted-foreground mt-1">
                                 Trading Terminal
                             </span>
                         </div>
@@ -63,11 +63,11 @@ export function AppSidebar() {
 
             <SidebarContent>
                 <SidebarGroup>
-                    <SidebarGroupLabel className="text-[0.65rem] font-mono uppercase tracking-[0.2em] text-muted-foreground mb-2 mt-4">
+                    <SidebarGroupLabel className="text-sm font-mono uppercase tracking-[0.2em] text-muted-foreground mb-2 mt-4">
                         SYSTEMS_NAV
                     </SidebarGroupLabel>
                     <SidebarGroupContent>
-                        <SidebarMenu>
+                        <SidebarMenu className="gap-1">
                             {navItems.map((item) => {
                                 const isActive =
                                     item.url === '/'
@@ -80,7 +80,7 @@ export function AppSidebar() {
                                         <SidebarMenuButton
                                             isActive={isActive}
                                             tooltip={item.title}
-                                            className={`transition-all duration-200 uppercase font-mono tracking-wider text-xs rounded-none ${isActive ? 'bg-accent/10 text-accent border-l-2 border-accent shadow-[inset_2px_0_0_0_var(--accent)]' : 'text-muted-foreground hover:bg-muted hover:text-foreground border-l-2 border-transparent'}`}
+                                            className={`h-11 py-3 transition-all duration-200 uppercase font-mono tracking-wider text-sm rounded-none ${isActive ? 'bg-accent/10 text-accent border-l-2 border-accent shadow-[inset_2px_0_0_0_var(--accent)]' : 'text-muted-foreground hover:bg-muted hover:text-foreground border-l-2 border-transparent'}`}
                                             render={
                                                 <Link href={item.url} className="flex items-center gap-3">
                                                     <item.icon className={`size-4 ${isActive ? 'drop-shadow-[0_0_5px_currentColor]' : ''}`} strokeWidth={1.5} />

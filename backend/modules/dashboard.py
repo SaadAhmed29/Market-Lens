@@ -160,10 +160,14 @@ def get_dashboard_data() -> dict:
             "WHERE LOWER(status) = 'open'",
         )
 
+        total_trades_executed = count_rows(conn, "SELECT SUM(total_trades) FROM execution.stats", )
+
         running_simulations = count_rows(
             conn,
             "SELECT COUNT(DISTINCT strategy_name) FROM simulation.positions",
         )
+
+        total_trades_simulated = count_rows(conn, "SELECT SUM(total_trades) FROM simulation.stats", )
 
         connected_accounts = count_rows(
             conn, "SELECT COUNT(*) FROM accounts.api"
@@ -178,18 +182,16 @@ def get_dashboard_data() -> dict:
         )
 
         # Portfolio stats from accounts.main_stats
-        portfolio_value: float = 0.0
         total_return: float = 0.0
         try:
             stats_row = conn.execute(
                 text(
-                    "SELECT wallet_balance, total_realized_pnl "
+                    "SELECT total_realized_pnl "
                     "FROM accounts.main_stats "
                     "LIMIT 1"
                 )
             ).mappings().fetchone()
             if stats_row:
-                portfolio_value = float(stats_row["wallet_balance"] or 0)
                 total_return = float(stats_row["total_realized_pnl"] or 0)
         except Exception:
             pass  # table may not exist yet; defaults are already set
@@ -204,10 +206,11 @@ def get_dashboard_data() -> dict:
         "total_strategies": total_strategies,
         "active_strategies": active_strategies,
         "running_executions": running_executions,
+        "total_trades_executed": total_trades_executed,
         "running_simulations": running_simulations,
+        "total_trades_simulated": total_trades_simulated,
         "connected_accounts": connected_accounts,
         "total_backtests": total_backtests,
-        "portfolio_value": portfolio_value,
         "total_return": total_return,
         "trained_ml_models": ml_models,
         "strategies": strategy_table,

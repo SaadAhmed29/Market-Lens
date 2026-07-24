@@ -25,10 +25,11 @@ def dashboard() -> JSONResponse:
                 "total_strategies": int,
                 "active_strategies": int,
                 "running_executions": int,
+                "total_trades_executed": int,
                 "running_simulations": int,
+                "total_trades_simulated": int,
                 "connected_accounts": int,
                 "total_backtests": int,
-                "portfolio_value": float,
                 "total_return": float,
                 "trained_ml_models": [{"name": str, "type": str}, ...],
                 "strategies": [

@@ -9,6 +9,7 @@ import { DataTable, Column } from '@/components/shared/DataTable'
 import { EquityCurve } from '@/components/charts/EquityCurve'
 import { DrawdownChart } from '@/components/charts/DrawdownChart'
 import { ReturnsHeatmap } from '@/components/charts/ReturnsHeatmap'
+import { PieChart } from '@/components/charts/PieChart'
 import { useStrategyDetail } from '@/hooks/useStrategies'
 import { Skeleton } from '@/components/ui/skeleton'
 import { EmptyState } from '@/components/shared/EmptyState'
@@ -332,6 +333,7 @@ export default function StrategyDetailPage() {
                             <EquityCurve data={chart_data?.equity_curve || []} />
                             <DrawdownChart data={chart_data?.drawdown || []} />
                             <ReturnsHeatmap data={buildHeatmapData(chart_data?.monthly_returns || [])} />
+                            <PieChart winRate={performance?.win_rate || 0} />
                         </TabsContent>
                         <TabsContent value="trades" className="mt-4">
                             <DataTable data={recent_trades || []} columns={tradeColumns} emptyMessage="NO_RECENT_TRADES_FOUND" />

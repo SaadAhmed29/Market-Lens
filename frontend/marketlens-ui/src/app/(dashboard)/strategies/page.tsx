@@ -41,12 +41,12 @@ export default function StrategiesPage() {
                     {row.sharpe_ratio > 0 ? '+' : ''}{(row.sharpe_ratio || 0).toFixed(4)}
                 </span>
             ),
-            className: 'text-right'
+            className: 'text-center'
         },
         {
             header: 'WIN RATE',
             cell: (row) => `${((row.win_rate || 0) * 100).toFixed(2)}%`,
-            className: 'text-right'
+            className: 'text-center'
         },
         {
             header: 'STATUS',

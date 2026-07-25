@@ -151,10 +151,10 @@ export default function DashboardPage() {
                         <StatCard label="ACTIVE STRATEGIES" value={dashboard.active_strategies} className="border-accent/50" />
                         <StatCard label="RUNNING EXECUTIONS" value={dashboard.running_executions} />
                         <StatCard label="TRADES EXECUTED" value={dashboard.total_trades_executed} />
-                        <StatCard label="STRATS SIMULATED" value={dashboard.running_simulations} />
+                        <StatCard label="STRATEGIES SIMULATED" value={dashboard.running_simulations} />
                         <StatCard label="TRADES SIMULATED" value={dashboard.total_trades_simulated} />
                         <StatCard label="CONNECTED ACCOUNTS" value={dashboard.connected_accounts} />
-                        <StatCard label="ML MODELS" value={dashboard.trained_ml_models} />
+                        <StatCard label="ML/DL MODELS" value={dashboard.trained_ml_models} />
                         <StatCard label="TOTAL BACKTESTS" value={dashboard.total_backtests} />
                         <StatCard
                             label="TOTAL RETURN"

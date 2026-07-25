@@ -14,6 +14,17 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from utils.db import get_engine
+import math
+
+def sanitize_floats(d: dict) -> dict:
+    """Replace non-JSON-compliant float values (inf, -inf, nan) with None."""
+    sanitized = {}
+    for key, value in d.items():
+        if isinstance(value, float) and (math.isinf(value) or math.isnan(value)):
+            sanitized[key] = None
+        else:
+            sanitized[key] = value
+    return sanitized
 
 def get_all_strategies() -> list[dict]:
     engine = get_engine()
@@ -40,7 +51,7 @@ def get_all_strategies() -> list[dict]:
         try:
             stats_rows = conn.execute(
                 text(
-                    "SELECT strategy_name, avg_return, sharpe_ratio, win_rate "
+                    "SELECT strategy_name, total_trades, avg_return, sharpe_ratio, win_rate "
                     "FROM simulation.stats"
                 )
             ).mappings().fetchall()
@@ -65,6 +76,7 @@ def get_all_strategies() -> list[dict]:
             "exchange": cfg.get("exchange", "N/A"),
             "timehorizon": cfg.get("timehorizon", "N/A"),
             "status": position_status.get(name, "inactive"),
+            "total_trades": stats.get("total_trades") or 0,
             "latest_return": stats.get("avg_return") or 0.0,
             "sharpe_ratio": stats.get("sharpe_ratio") or 0.0,
             "win_rate": stats.get("win_rate") or 0.0,
@@ -134,7 +146,15 @@ def get_strategy_detail(strategy_name: str) -> dict:
                 text("SELECT * FROM simulation.stats WHERE strategy_name = :name"),
                 {"name": strategy_name}
             ).mappings().fetchone()
-            perf_summary = dict(stats_row) if stats_row else {}
+
+            status_row = conn.execute(
+                text("SELECT status FROM simulation.positions WHERE strategy_name = :name"),
+                {"name": strategy_name}
+            ).mappings().fetchone()
+
+            perf_summary = sanitize_floats(dict(stats_row)) if stats_row else {}
+            status = dict(status_row) if status_row else {'status': 'INACTIVE'}
+            perf_summary['status'] = status['status']
         except Exception:
             perf_summary = {}
 
@@ -167,7 +187,7 @@ def get_strategy_detail(strategy_name: str) -> dict:
                     df["entry_time_str"] = pd.to_datetime(df["entry_time"]).dt.strftime('%Y-%m-%dT%H:%M:%SZ')
 
                 # Recent trades
-                recent_df = df.sort_values("exit_time", ascending=False).head(3)
+                recent_df = df.sort_values("exit_time", ascending=False)
                 for _, r in recent_df.iterrows():
                     recent_trades.append({
                         "entry_time": r.get("entry_time_str", ""),

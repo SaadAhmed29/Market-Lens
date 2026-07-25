@@ -21,10 +21,10 @@ export function StatCard({ label, value, change, isUp, icon, className }: StatCa
 
             <CardContent className="p-4 flex flex-col justify-between h-full relative z-10">
                 <div className="flex flex-col gap-1">
-                    <span className="text-sm font-bold font-mono uppercase tracking-[0.2em] text-muted-foreground flex items-center justify-center gap-1">
-                        <span className="text-accent">&gt;</span> {label}
+                    <span className="text-sm font-bold uppercase tracking-[0.15em] text-muted-foreground flex flex-wrap items-center justify-center gap-1 leading-snug text-center px-1 min-h-[2.5rem]">
+                        <span className="text-accent"></span> {label}
                     </span>
-                    <span className="text-2xl font-mono tracking-tight text-center mt-1">
+                    <span className="text-2xl font-mono tracking-tight text-center mt-1 break-words">
                         {value}
                     </span>
                 </div>

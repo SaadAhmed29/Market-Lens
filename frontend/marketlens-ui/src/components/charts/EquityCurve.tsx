@@ -18,7 +18,14 @@ interface EquityCurveProps {
     height?: number
 }
 
-export function EquityCurve({ data, title = "EQUITY_CURVE", height = 300 }: EquityCurveProps) {
+export function EquityCurve({ data, title = "EQUITY CURVE", height = 300 }: EquityCurveProps) {
+    const values = data.map((d) => d.value).filter((v) => typeof v === 'number' && !isNaN(v))
+    const dataMin = values.length ? Math.min(...values) : 0
+    const dataMax = values.length ? Math.max(...values) : 0
+    const range = dataMax - dataMin
+    const padding = range * 0.1 || 50 // fallback if flat/no data
+    const yDomain: [number, number] = [dataMin - padding, dataMax + padding]
+
     return (
         <Card className="border-border bg-card cyber-chamfer">
             <CardHeader className="py-3 px-4 border-b border-border bg-background/50">
@@ -29,7 +36,7 @@ export function EquityCurve({ data, title = "EQUITY_CURVE", height = 300 }: Equi
             <CardContent className="p-4 pt-6">
                 <div style={{ height }}>
                     <ResponsiveContainer width="100%" height="100%">
-                        <AreaChart data={data} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                        <AreaChart data={data} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
                             <defs>
                                 <linearGradient id="colorValue" x1="0" y1="0" x2="0" y2="1">
                                     <stop offset="5%" stopColor="var(--accent)" stopOpacity={0.3} />
@@ -44,18 +51,21 @@ export function EquityCurve({ data, title = "EQUITY_CURVE", height = 300 }: Equi
                                 </filter>
                             </defs>
                             <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
-                            <XAxis 
-                                dataKey="date" 
+                            <XAxis
+                                dataKey="date"
                                 tick={{ fill: 'var(--muted-foreground)', fontSize: 10, fontFamily: 'monospace' }}
                                 tickLine={false}
                                 axisLine={{ stroke: 'var(--border)' }}
                                 minTickGap={30}
                             />
-                            <YAxis 
+                            <YAxis
+                                domain={yDomain}
                                 tick={{ fill: 'var(--muted-foreground)', fontSize: 10, fontFamily: 'monospace' }}
                                 tickLine={false}
                                 axisLine={{ stroke: 'var(--border)' }}
-                                tickFormatter={(val) => `$${val.toLocaleString()}`}
+                                tickFormatter={(val) => `$${Math.round(val).toLocaleString()}`}
+                                allowDecimals={false}
+                                tickCount={6}
                             />
                             <Tooltip
                                 contentStyle={{

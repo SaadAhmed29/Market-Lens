@@ -15,8 +15,8 @@ interface ReturnsHeatmapProps {
 
 const MONTHS = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC']
 
-export function ReturnsHeatmap({ data, title = "MONTHLY_RETURNS_HEATMAP" }: ReturnsHeatmapProps) {
-    
+export function ReturnsHeatmap({ data, title = "MONTHLY-RETURNS HEATMAP" }: ReturnsHeatmapProps) {
+
     // Helper to determine color based on return value
     const getColorClass = (val: number | null) => {
         if (val === null) return 'bg-muted/20 text-muted-foreground/30'
@@ -44,7 +44,7 @@ export function ReturnsHeatmap({ data, title = "MONTHLY_RETURNS_HEATMAP" }: Retu
                         ))}
                         <div className="text-[10px] font-mono text-muted-foreground text-center py-1 border-l border-border pl-1">YTD</div>
                     </div>
-                    
+
                     <div className="flex flex-col gap-1">
                         {data.map((row, i) => (
                             <div key={i} className="grid grid-cols-14 gap-1">
@@ -52,22 +52,22 @@ export function ReturnsHeatmap({ data, title = "MONTHLY_RETURNS_HEATMAP" }: Retu
                                     {row.year}
                                 </div>
                                 {row.months.map((val, j) => (
-                                    <div 
-                                        key={j} 
+                                    <div
+                                        key={j}
                                         className={cn(
                                             "text-xs font-mono flex items-center justify-center py-2 transition-colors cursor-default hover:brightness-125 border border-border/50",
                                             getColorClass(val)
                                         )}
-                                        title={val !== null ? `${val}%` : 'No data'}
+                                        title={val !== null ? `$${val}` : 'No data'}
                                     >
-                                        {val !== null ? val > 0 ? `+${val.toFixed(1)}%` : `${val.toFixed(1)}%` : '-'}
+                                        {val !== null ? val > 0 ? `+$${val.toFixed(1)}` : `$${val.toFixed(1)}` : '-'}
                                     </div>
                                 ))}
                                 <div className={cn(
                                     "text-xs font-mono flex items-center justify-center border-l border-border pl-1 font-bold",
                                     row.ytd > 0 ? "text-accent" : row.ytd < 0 ? "text-destructive" : "text-muted-foreground"
                                 )}>
-                                    {row.ytd > 0 ? `+${row.ytd.toFixed(1)}%` : `${row.ytd.toFixed(1)}%`}
+                                    {row.ytd > 0 ? `+$${row.ytd.toFixed(1)}` : `$${row.ytd.toFixed(1)}`}
                                 </div>
                             </div>
                         ))}

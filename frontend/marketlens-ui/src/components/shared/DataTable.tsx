@@ -16,6 +16,7 @@ export interface Column<T> {
     accessorKey?: keyof T
     cell?: (item: T) => React.ReactNode
     className?: string
+    headerClassName?: string
 }
 
 interface DataTableProps<T> {
@@ -56,7 +57,10 @@ export function DataTable<T>({
                             {columns.map((col, i) => (
                                 <TableHead
                                     key={i}
-                                    className={cn("font-mono text-xs uppercase tracking-widest text-muted-foreground", col.className)}
+                                    className={cn(
+                                        "px-4 font-bold text-sm uppercase tracking-widest text-muted-foreground",
+                                        col.headerClassName ?? col.className
+                                    )}
                                 >
                                     {col.header}
                                 </TableHead>
@@ -77,7 +81,7 @@ export function DataTable<T>({
                                     <TableCell
                                         key={colIndex}
                                         className={cn(
-                                            "py-3 font-mono text-sm group-hover:text-foreground transition-colors",
+                                            "px-4 py-3 font-mono text-sm group-hover:text-foreground transition-colors",
                                             col.className
                                         )}
                                     >

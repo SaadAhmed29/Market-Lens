@@ -89,23 +89,27 @@ export default function DashboardPage() {
         { header: 'SYMBOL', accessorKey: 'symbol', className: 'text-center' },
         { header: 'EXCHANGE', accessorKey: 'exchange', className: 'text-center' },
         { header: 'TIMEFRAME', accessorKey: 'timehorizon', className: 'text-center' },
-        { header: 'TOTAL_TRADES', accessorKey: 'total_trades', className: 'text-center' },
+        { header: 'TOTAL TRADES', accessorKey: 'total_trades', className: 'text-center' },
         {
-            header: 'AVERAGE_RETURN',
+            header: 'AVERAGE RETURN',
             cell: (row) => (
                 <span className={row.latest_return > 0 ? 'text-accent' : row.latest_return < 0 ? 'text-destructive' : 'text-foreground'}>
-                    {row.latest_return > 0 ? '+' : ''}{row.latest_return.toFixed(5)}%
+                    {row.latest_return > 0 ? '+' : ''}{(row.latest_return * 100).toFixed(2)}%
                 </span>
             ),
             className: 'text-center'
         },
         {
             header: 'SHARPE',
-            cell: (row) => row.sharpe_ratio.toFixed(4),
+            cell: (row) => (
+                <span className={row.sharpe_ratio > 0 ? 'text-accent' : row.sharpe_ratio < 0 ? 'text-destructive' : 'text-foreground'}>
+                    {row.sharpe_ratio > 0 ? '+' : ''}{(row.sharpe_ratio).toFixed(4)}
+                </span>
+            ),
             className: 'text-center'
         },
         {
-            header: 'WIN_RATE',
+            header: 'WIN RATE',
             cell: (row) => `${(row.win_rate * 100).toFixed(1)}%`,
             className: 'text-center'
         },
@@ -143,17 +147,17 @@ export default function DashboardPage() {
                     ))
                 ) : dashboard && (
                     <>
-                        <StatCard label="TOTAL_STRATEGIES" value={dashboard.total_strategies} />
-                        <StatCard label="ACTIVE_STRATEGIES" value={dashboard.active_strategies} className="border-accent/50" />
-                        <StatCard label="RUNNING_EXECUTIONS" value={dashboard.running_executions} />
-                        <StatCard label="TRADES_EXECUTED" value={dashboard.total_trades_executed} />
-                        <StatCard label="STRATEGIES_SIMULATED" value={dashboard.running_simulations} />
-                        <StatCard label="TRADES_SIMULATED" value={dashboard.total_trades_simulated} />
-                        <StatCard label="CONNECTED_ACCOUNTS" value={dashboard.connected_accounts} />
-                        <StatCard label="ML_MODELS" value={dashboard.trained_ml_models} />
-                        <StatCard label="TOTAL_BACKTESTS" value={dashboard.total_backtests} />
+                        <StatCard label="TOTAL STRATEGIES" value={dashboard.total_strategies} />
+                        <StatCard label="ACTIVE STRATEGIES" value={dashboard.active_strategies} className="border-accent/50" />
+                        <StatCard label="RUNNING EXECUTIONS" value={dashboard.running_executions} />
+                        <StatCard label="TRADES EXECUTED" value={dashboard.total_trades_executed} />
+                        <StatCard label="STRATS SIMULATED" value={dashboard.running_simulations} />
+                        <StatCard label="TRADES SIMULATED" value={dashboard.total_trades_simulated} />
+                        <StatCard label="CONNECTED ACCOUNTS" value={dashboard.connected_accounts} />
+                        <StatCard label="ML MODELS" value={dashboard.trained_ml_models} />
+                        <StatCard label="TOTAL BACKTESTS" value={dashboard.total_backtests} />
                         <StatCard
-                            label="TOTAL_RETURN"
+                            label="TOTAL RETURN"
                             value={`$${dashboard.total_return.toLocaleString()}`}
                             isUp={dashboard.total_return >= 0}
                         />

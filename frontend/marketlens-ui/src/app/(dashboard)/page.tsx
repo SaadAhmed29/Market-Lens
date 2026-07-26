@@ -78,7 +78,7 @@ export default function DashboardPage() {
 
     if (isError) {
         return (
-            <PageWrapper title="DASHBOARD_OVERVIEW">
+            <PageWrapper title="DASHBOARD OVERVIEW">
                 <EmptyState message="ERROR_FETCHING_DASHBOARD_DATA" />
             </PageWrapper>
         )
@@ -138,7 +138,7 @@ export default function DashboardPage() {
         "bg-card border border-border cyber-chamfer font-mono text-xs uppercase tracking-widest text-muted-foreground px-3 py-1.5 hover:border-accent/50 hover:text-foreground focus:outline-none focus:border-accent/50 transition-colors"
 
     return (
-        <PageWrapper title="DASHBOARD_OVERVIEW">
+        <PageWrapper title="DASHBOARD OVERVIEW">
             {/* Top Stat Strip */}
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
                 {isLoading ? (

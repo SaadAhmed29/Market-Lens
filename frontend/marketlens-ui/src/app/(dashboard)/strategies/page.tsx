@@ -69,7 +69,7 @@ export default function StrategiesPage() {
     ) || []
 
     return (
-        <PageWrapper title="STRATEGY_DIRECTORY">
+        <PageWrapper title="STRATEGY DIRECTORY">
             <div className="flex flex-col sm:flex-row gap-4 items-center justify-between bg-card p-4 border border-border cyber-chamfer">
                 <div className="w-full sm:w-96">
                     <Input

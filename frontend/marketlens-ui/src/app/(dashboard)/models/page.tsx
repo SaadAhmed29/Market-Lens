@@ -14,7 +14,7 @@ export default function ModelsPage() {
 
     if (isError) {
         return (
-            <PageWrapper title="ML_MODEL_REGISTRY">
+            <PageWrapper title="ML MODEL REGISTRY">
                 <EmptyState message="ERROR: Failed to load models" />
             </PageWrapper>
         )
@@ -54,7 +54,7 @@ export default function ModelsPage() {
 
     return (
         <PageWrapper
-            title="ML_MODEL_REGISTRY"
+            title="ML MODEL REGISTRY"
         >
             <div className="flex items-center gap-2 mb-4">
                 <span className="text-accent">&gt;</span>

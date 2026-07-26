@@ -20,6 +20,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from backend.routes.dashboard import router as dashboard_router
 from backend.routes.strategies import router as strategies_router
 from backend.routes.models import router as models_router
+from backend.routes.executions import router as executions_router
 
 
 # App
@@ -50,6 +51,7 @@ app.add_middleware(
 app.include_router(dashboard_router)
 app.include_router(strategies_router)
 app.include_router(models_router)
+app.include_router(executions_router)
 
 # Health check
 

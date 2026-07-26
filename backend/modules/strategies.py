@@ -198,6 +198,7 @@ def get_strategy_detail(strategy_name: str) -> dict:
                         "quantity": r.get("quantity", 0),
                         "net_pnl": r.get("net_pnl", 0),
                         "balance_after_trade": r.get("balance_after_trade", 0),
+                        "exit_reason": r.get("exit_reason", "Unknown")
                     })
                 
                 # Chart Data

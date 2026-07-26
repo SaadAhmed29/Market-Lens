@@ -212,6 +212,19 @@ export default function StrategyDetailPage() {
             className: 'text-center',
             headerClassName: 'text-center',
         },
+        {
+            header: 'EXIT_REASON',
+            cell: (row) => {
+                const exitReason = row.exit_reason || 'Unknown';
+                return (
+                    <span>
+                        {exitReason}
+                    </span>
+                )
+            },
+            className: 'text-center',
+            headerClassName: 'text-center',
+        },
     ]
 
     return (

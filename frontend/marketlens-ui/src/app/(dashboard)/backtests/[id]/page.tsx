@@ -1,120 +1,213 @@
 'use client'
 
+import React from 'react'
 import { useParams } from 'next/navigation'
 import { PageWrapper } from '@/components/layout/PageWrapper'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Button } from '@/components/ui/button'
-import { DataTable, Column } from '@/components/shared/DataTable'
+import { EmptyState } from '@/components/shared/EmptyState'
+import { DataTable } from '@/components/shared/DataTable'
+import { useBacktestDetail } from '@/hooks/useBacktests'
+import { BarChart, Bar, ResponsiveContainer, XAxis, YAxis, Tooltip, Cell } from 'recharts'
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { EquityCurve } from '@/components/charts/EquityCurve'
 import { DrawdownChart } from '@/components/charts/DrawdownChart'
-import { ReturnsHeatmap } from '@/components/charts/ReturnsHeatmap'
-import { useBacktest } from '@/hooks/useBacktests'
-import { Trade } from '@/types/strategy'
+import { PieChart } from '@/components/charts/PieChart'
+
+function StatCard({ title, value, colored = false, formatFn }: { title: string, value: any, colored?: boolean, formatFn?: (v: number) => string }) {
+    let formattedValue = value
+    if (typeof value === 'number') {
+        formattedValue = formatFn ? formatFn(value) : value.toLocaleString(undefined, { maximumFractionDigits: 4 })
+    }
+
+    let colorClass = "text-foreground"
+    if (colored && typeof value === 'number') {
+        colorClass = value > 0 ? "text-accent" : value < 0 ? "text-destructive" : "text-foreground"
+    }
+
+    return (
+        <Card className="border-border bg-card cyber-chamfer">
+            <CardContent className="p-4 flex flex-col gap-1">
+                <span className="text-xs text-center font-bold text-muted-foreground uppercase tracking-widest font-mono">{title}</span>
+                <span className={`text-2xl text-center font-mono ${colorClass}`}>{formattedValue ?? '-'}</span>
+            </CardContent>
+        </Card>
+    )
+}
 
 export default function BacktestDetailPage() {
     const params = useParams()
-    const { data: backtest, isLoading } = useBacktest(params.id as string)
+    const requestId = params.id as string
+
+    const { data, isLoading, isError } = useBacktestDetail(requestId)
 
     if (isLoading) {
-        return <PageWrapper title="LOADING_SIMULATION_DATA..."><div/></PageWrapper>
+        return (
+            <PageWrapper title={`BACKTEST_${requestId?.substring(0, 8) || 'LOADING'}`}>
+                <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4 mb-8">
+                    {Array.from({ length: 12 }).map((_, i) => (
+                        <Card key={i} className="border-border bg-card cyber-chamfer h-24 animate-pulse" />
+                    ))}
+                </div>
+            </PageWrapper>
+        )
     }
 
-    if (!backtest) {
-        return <PageWrapper title="SIMULATION_NOT_FOUND"><div/></PageWrapper>
+    if (isError || !data || !data.request) {
+        return (
+            <PageWrapper title="BACKTEST_ERROR">
+                <EmptyState message="FAILED_TO_LOAD_BACKTEST_DETAIL" />
+            </PageWrapper>
+        )
     }
 
-    // Mock chart data
-    const mockCurve = Array.from({ length: 50 }).map((_, i) => ({
-        date: `Day ${i}`,
-        value: 100000 + (Math.sin(i / 5) * 5000) + (i * 500)
-    }))
-    
-    const mockDrawdown = Array.from({ length: 50 }).map((_, i) => ({
-        date: `Day ${i}`,
-        value: -(Math.random() * 5 + (Math.cos(i / 5) * 5 + 5))
-    }))
-    
-    const mockHeatmap = [
-        { year: 2026, months: [2.1, -1.5, 4.2, 0.5, -2.1, 8.4, 3.1, null, null, null, null, null], ytd: 15.3 },
+    const { request, equity_curve, drawdown, monthly_returns, win_loss, ledger } = data
+    const summary = typeof request.result_summary === 'string' ? JSON.parse(request.result_summary) : (request.result_summary || {})
+    const config = typeof request.request_config === 'string' ? JSON.parse(request.request_config) : (request.request_config || {})
+    const strategyName = request.strategy_name || 'UNKNOWN'
+
+    // PieChart component expects a fraction (0–1), so derive it from win_loss data
+    const winEntry = (win_loss || []).find((e: any) => e.name === 'WIN')
+    const totalWL = (win_loss || []).reduce((acc: number, e: any) => acc + (Number(e.value) || 0), 0)
+    const winRate = winEntry && totalWL > 0 ? Number(winEntry.value) / totalWL : 0
+
+    let statusVariant = 'cyber-pending'
+    if (request.status === 'Completed') statusVariant = 'cyber-completed'
+    else if (request.status === 'Running') statusVariant = 'cyber-running'
+    else if (request.status === 'Failed') statusVariant = 'cyber-error'
+
+    const handleExport = () => {
+        const json = JSON.stringify(ledger, null, 2)
+        const blob = new Blob([json], { type: 'application/json' })
+        const url = URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = url
+        a.download = `${strategyName}_ledger.json`
+        a.click()
+        URL.revokeObjectURL(url)
+    }
+
+    const ledgerColumns = [
+        { header: 'ENTRY TIME', cell: (r: any) => r.entry_time ? new Date(r.entry_time).toLocaleString() : '-' },
+        { header: 'EXIT TIME', cell: (r: any) => r.exit_time ? new Date(r.exit_time).toLocaleString() : '-' },
+        {
+            header: 'DIRECTION',
+            cell: (r: any) => (
+                <Badge variant={r.direction?.toUpperCase() === 'LONG' ? 'cyber-running' : 'cyber-paused'}>
+                    {r.direction?.toUpperCase() || '-'}
+                </Badge>
+            )
+        },
+        { header: 'ENTRY PRICE', cell: (r: any) => r.entry_price != null ? `$${Number(r.entry_price).toFixed(2)}` : '-' },
+        { header: 'EXIT PRICE', cell: (r: any) => r.exit_price != null ? `$${Number(r.exit_price).toFixed(2)}` : '-' },
+        { header: 'QTY', accessorKey: 'quantity' as any },
+        { header: 'GROSS PNL', cell: (r: any) => r.gross_pnl != null ? `$${Number(r.gross_pnl).toFixed(2)}` : '-' },
+        { header: 'COMMISSION', cell: (r: any) => r.commission != null ? `$${Number(r.commission).toFixed(2)}` : '-' },
+        { header: 'SLIPPAGE', cell: (r: any) => r.slippage != null ? `$${Number(r.slippage).toFixed(2)}` : '-' },
+        {
+            header: 'NET PNL',
+            cell: (r: any) => (
+                <span className={r.net_pnl > 0 ? "text-accent font-bold" : r.net_pnl < 0 ? "text-destructive font-bold" : ""}>
+                    {r.net_pnl != null ? `$${Number(r.net_pnl).toFixed(2)}` : '-'}
+                </span>
+            )
+        },
+        { header: 'BALANCE', cell: (r: any) => r.balance_after_trade != null ? `$${Number(r.balance_after_trade).toFixed(2)}` : '-' }
     ]
 
     return (
-        <PageWrapper 
-            title={`BACKTEST: ${backtest.strategyName}`}
-            actions={
-                <div className="flex items-center gap-4">
-                    <Badge variant="cyber-completed">{backtest.status}</Badge>
-                    <Button variant="cyber-outline">EXPORT_REPORT_JSON</Button>
+        <PageWrapper title={`BT_${requestId.substring(0, 8)}`} actions={
+            <Button variant="cyber-outline" size="sm" onClick={handleExport}>
+                EXPORT_LEDGER
+            </Button>
+        }>
+            {/* Header info */}
+            <div className="flex flex-wrap items-center gap-4 mb-6">
+                <Badge variant={statusVariant as any} className={request.status === 'Running' ? 'animate-pulse' : ''}>
+                    {request.status.toUpperCase()}
+                </Badge>
+                <div className="flex flex-col">
+                    <span className="text-xs text-muted-foreground font-bold tracking-widest uppercase">STRATEGY</span>
+                    <span className="text-sm font-mono text-accent">{strategyName}</span>
                 </div>
-            }
-        >
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-                <Card className="border-border bg-card cyber-chamfer">
-                    <CardContent className="p-4">
-                        <span className="text-[10px] text-muted-foreground uppercase tracking-widest block mb-1">INITIAL_CAPITAL</span>
-                        <span className="text-xl font-mono text-foreground">${backtest.initialCapital.toLocaleString()}</span>
-                    </CardContent>
-                </Card>
-                <Card className="border-border bg-card cyber-chamfer">
-                    <CardContent className="p-4">
-                        <span className="text-[10px] text-muted-foreground uppercase tracking-widest block mb-1">FINAL_CAPITAL</span>
-                        <span className="text-xl font-mono text-accent">${backtest.finalCapital.toLocaleString()}</span>
-                    </CardContent>
-                </Card>
-                <Card className="border-border bg-card cyber-chamfer">
-                    <CardContent className="p-4">
-                        <span className="text-[10px] text-muted-foreground uppercase tracking-widest block mb-1">SHARPE_RATIO</span>
-                        <span className="text-xl font-mono text-foreground">{backtest.stats.sharpe}</span>
-                    </CardContent>
-                </Card>
-                <Card className="border-border bg-card cyber-chamfer">
-                    <CardContent className="p-4">
-                        <span className="text-[10px] text-muted-foreground uppercase tracking-widest block mb-1">MAX_DRAWDOWN</span>
-                        <span className="text-xl font-mono text-destructive">{backtest.stats.maxDrawdown}%</span>
-                    </CardContent>
-                </Card>
+                <div className="w-[1px] h-6 bg-border mx-2" />
+                <div className="flex flex-col">
+                    <span className="text-xs text-muted-foreground font-bold tracking-widest uppercase">DATE RANGE</span>
+                    <span className="text-sm font-mono text-foreground">{config.start_date || '-'} to {config.end_date || '-'}</span>
+                </div>
+                <div className="w-[1px] h-6 bg-border mx-2" />
+                <div className="flex flex-col">
+                    <span className="text-xs text-muted-foreground font-bold tracking-widest uppercase">INITIAL / FINAL BAL</span>
+                    <span className="text-sm font-mono text-foreground">
+                        ${config.initial_balance || 0} &rarr; ${summary.final_balance != null ? Number(summary.final_balance).toLocaleString() : '---'}
+                    </span>
+                </div>
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-                
-                {/* QuantStats Grid */}
-                <Card className="lg:col-span-1 border-border bg-card cyber-chamfer h-fit">
-                    <CardHeader className="py-3 border-b border-border bg-background/50">
-                        <CardTitle className="text-xs font-mono uppercase tracking-widest text-accent">QUANT_STATS</CardTitle>
-                    </CardHeader>
-                    <CardContent className="p-0">
-                        <div className="flex flex-col divide-y divide-border">
-                            {Object.entries(backtest.stats).map(([key, value]) => (
-                                <div key={key} className="flex items-center justify-between p-3 text-sm font-mono hover:bg-muted/30 transition-colors">
-                                    <span className="text-muted-foreground uppercase tracking-wider">{key.replace(/([A-Z])/g, '_$1')}</span>
-                                    <span className="text-foreground">{value}</span>
-                                </div>
-                            ))}
-                        </div>
-                    </CardContent>
-                </Card>
+            {/* Stats Grid */}
+            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4 mb-8">
+                {Object.entries(summary).map(([k, v]) => (
+                    <StatCard
+                        key={k}
+                        title={k.replace(/_/g, ' ')}
+                        value={v}
+                        colored={k.includes('sharpe') || k.includes('drawdown') || k.includes('pnl') || k.includes('win_rate') || k === 'total_net_profit' || k === 'cagr'}
+                        formatFn={k === 'win_rate' ? (val) => `${val.toFixed(1)}%` : undefined}
+                    />
+                ))}
+            </div>
 
-                {/* Charts */}
-                <div className="lg:col-span-3">
-                    <Tabs defaultValue="charts" className="w-full">
-                        <TabsList>
-                            <TabsTrigger value="charts">PERFORMANCE_CHARTS</TabsTrigger>
-                            <TabsTrigger value="trades">TRADE_LEDGER</TabsTrigger>
-                        </TabsList>
-                        <TabsContent value="charts" className="flex flex-col gap-6 mt-4">
-                            <EquityCurve data={mockCurve} />
-                            <DrawdownChart data={mockDrawdown} />
-                            <ReturnsHeatmap data={mockHeatmap} />
-                        </TabsContent>
-                        <TabsContent value="trades" className="mt-4">
-                            <Card className="border-border bg-card cyber-chamfer p-12 text-center text-muted-foreground font-mono">
-                                [ TRADE_LEDGER_DATA_UNAVAILABLE ]
-                            </Card>
-                        </TabsContent>
-                    </Tabs>
-                </div>
+            {/* Charts Tabbed */}
+            <div className="mb-8">
+                <Tabs defaultValue="equity">
+                    <TabsList className="mb-4">
+                        <TabsTrigger value="equity">EQUITY CURVE</TabsTrigger>
+                        <TabsTrigger value="drawdown">DRAWDOWN</TabsTrigger>
+                        <TabsTrigger value="monthly">MONTHLY RETURNS</TabsTrigger>
+                        <TabsTrigger value="winloss">WIN/LOSS</TabsTrigger>
+                    </TabsList>
+
+                    <TabsContent value="equity">
+                        <EquityCurve data={equity_curve || []} height={320} />
+                    </TabsContent>
+
+                    <TabsContent value="drawdown">
+                        <DrawdownChart data={drawdown || []} height={320} />
+                    </TabsContent>
+
+                    <TabsContent value="monthly">
+                        <Card className="border-border bg-card cyber-chamfer">
+                            <CardContent className="p-4 h-80">
+                                <ResponsiveContainer width="100%" height="100%">
+                                    <BarChart data={monthly_returns || []}>
+                                        <XAxis dataKey="month" stroke="#888888" fontSize={10} tickLine={false} axisLine={false} />
+                                        <YAxis stroke="#888888" fontSize={10} tickLine={false} axisLine={false} tickFormatter={(val) => `${val.toFixed(2)}%`} />
+                                        <Tooltip
+                                            cursor={{ fill: 'rgba(255, 255, 255, 0.05)' }}
+                                            contentStyle={{ backgroundColor: 'hsl(var(--card))', borderColor: 'hsl(var(--border))', borderRadius: '0' }}
+                                        />
+                                        <Bar dataKey="return" radius={[2, 2, 0, 0]}>
+                                            {(monthly_returns || []).map((entry: any, index: number) => (
+                                                <Cell key={`cell-${index}`} fill={Number(entry.return) >= 0 ? "var(--accent)" : "var(--destructive)"} />
+                                            ))}
+                                        </Bar>
+                                    </BarChart>
+                                </ResponsiveContainer>
+                            </CardContent>
+                        </Card>
+                    </TabsContent>
+
+                    <TabsContent value="winloss">
+                        <PieChart winRate={winRate} height={320} />
+                    </TabsContent>
+                </Tabs>
+            </div>
+
+            {/* Ledger Table */}
+            <div className="mb-6">
+                <h3 className="text-sm font-mono uppercase tracking-widest text-muted-foreground mb-4">TRADE_LEDGER</h3>
+                <DataTable data={ledger || []} columns={ledgerColumns} emptyMessage="NO_TRADES_EXECUTED" />
             </div>
         </PageWrapper>
     )

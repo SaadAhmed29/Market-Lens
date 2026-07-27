@@ -189,7 +189,7 @@ export default function ExecutionDetailPage() {
                                                     <div className="col-span-4 break-words text-foreground">{cond.left}</div>
                                                     <div className="col-span-4 break-words text-accent">{cond.operator}</div>
                                                     <div className="col-span-4 break-words text-foreground">{cond.right}</div>
-                                                    <div className="col-span-1 break-words text-right text-muted-foreground">x{cond.persist_bars}</div>
+                                                    <div className="col-span-2 break-words text-right text-muted-foreground">x{cond.persist_bars}</div>
                                                 </div>
                                             ))}
                                         </div>

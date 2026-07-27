@@ -1,57 +1,40 @@
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import api from '@/lib/api'
-import { Wallet } from '@/types/wallet'
-
-const MOCK_WALLETS: Wallet[] = [
-    {
-        id: 'w-1',
-        exchangeName: 'BINANCE',
-        accountType: 'FUTURES',
-        apiStatus: 'CONNECTED',
-        currentBalance: 245190.42,
-        unrealizedPnl: 8412.50,
-        totalPnl: 45190.42,
-        strategiesAssigned: 3,
-        activePositionsCount: 2,
-        openOrdersCount: 5
-    },
-    {
-        id: 'w-2',
-        exchangeName: 'KRAKEN',
-        accountType: 'SPOT',
-        apiStatus: 'CONNECTED',
-        currentBalance: 52400.00,
-        unrealizedPnl: -640.00,
-        totalPnl: 2400.00,
-        strategiesAssigned: 1,
-        activePositionsCount: 1,
-        openOrdersCount: 1
-    },
-    {
-        id: 'w-3',
-        exchangeName: 'BYBIT',
-        accountType: 'FUTURES',
-        apiStatus: 'ERROR',
-        currentBalance: 0,
-        unrealizedPnl: 0,
-        totalPnl: 0,
-        strategiesAssigned: 0,
-        activePositionsCount: 0,
-        openOrdersCount: 0
-    }
-]
 
 export function useWallets() {
     return useQuery({
         queryKey: ['wallets'],
         queryFn: async () => {
-            try {
-                const { data } = await api.get('/wallets')
-                return data as Wallet[]
-            } catch (err) {
-                console.warn('Backend unavailable, using mock data for wallets')
-                return MOCK_WALLETS
-            }
+            const { data } = await api.get('/wallets')
+            return data.data ?? []
+        },
+        staleTime: 60000,
+    })
+}
+
+export function useWalletDetail(accountName: string) {
+    return useQuery({
+        queryKey: ['wallets', accountName],
+        queryFn: async () => {
+            const { data } = await api.get(`/wallets/${accountName}`)
+            return data.data ?? data
+        },
+        staleTime: 60000,
+        enabled: !!accountName,
+    })
+}
+
+export function useUpdateWalletKeys() {
+    const queryClient = useQueryClient()
+
+    return useMutation({
+        mutationFn: async ({ accountName, api_key, api_secret }: { accountName: string, api_key: string, api_secret: string }) => {
+            const { data } = await api.put(`/wallets/${accountName}/keys`, { api_key, api_secret })
+            return data
+        },
+        onSuccess: (_, variables) => {
+            queryClient.invalidateQueries({ queryKey: ['wallets'] })
+            queryClient.invalidateQueries({ queryKey: ['wallets', variables.accountName] })
         }
     })
 }

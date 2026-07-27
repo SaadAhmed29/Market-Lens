@@ -1,90 +1,158 @@
 'use client'
 
+import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { PageWrapper } from '@/components/layout/PageWrapper'
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { useWallets } from '@/hooks/useWallets'
-import { Wallet } from 'lucide-react'
+import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
+import { Input } from '@/components/ui/input'
+import { useWallets, useUpdateWalletKeys } from '@/hooks/useWallets'
+import { Wallet as WalletIcon } from 'lucide-react'
+import { EmptyState } from '@/components/shared/EmptyState'
 
-export default function WalletsPage() {
-    const { data: wallets, isLoading } = useWallets()
+function WalletCard({ wallet }: { wallet: any }) {
+    const router = useRouter()
+    const { mutate, isPending } = useUpdateWalletKeys()
+    const [open, setOpen] = useState(false)
+    const [apiKey, setApiKey] = useState('')
+    const [apiSecret, setApiSecret] = useState('')
+
+    const handleSave = () => {
+        mutate({ accountName: wallet.account_name, api_key: apiKey, api_secret: apiSecret }, {
+            onSuccess: () => {
+                setOpen(false)
+                setApiKey('')
+                setApiSecret('')
+            }
+        })
+    }
+
+    const formatCurrency = (val: number) => {
+        return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(val || 0)
+    }
 
     return (
-        <PageWrapper 
-            title="EXCHANGE_WALLETS"
-            actions={
-                <Button variant="cyber-glitch">CONNECT_NEW_EXCHANGE</Button>
-            }
+        <Card
+            className="border-border bg-card cyber-chamfer flex flex-col group/wallet cursor-pointer hover:border-accent transition-colors"
+            onClick={() => router.push(`/wallets/${wallet.account_name}`)}
         >
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {isLoading ? (
-                    Array.from({ length: 3 }).map((_, i) => (
-                        <Card key={i} className="border-border bg-card cyber-chamfer h-64 animate-pulse" />
-                    ))
-                ) : wallets?.map(wallet => (
-                    <Card key={wallet.id} className="border-border bg-card cyber-chamfer flex flex-col group/wallet">
-                        <CardHeader className="py-4 border-b border-border bg-background/50 flex flex-row items-center justify-between">
-                            <div className="flex items-center gap-3">
-                                <div className="p-2 bg-muted cyber-chamfer-sm border border-border group-hover/wallet:border-accent transition-colors">
-                                    <Wallet className="size-5 text-accent" strokeWidth={1.5} />
-                                </div>
-                                <div className="flex flex-col">
-                                    <CardTitle className="text-sm font-mono uppercase tracking-widest text-foreground">
-                                        {wallet.exchangeName}
-                                    </CardTitle>
-                                    <span className="text-[10px] text-muted-foreground font-mono tracking-widest">{wallet.accountType}</span>
-                                </div>
+            <CardHeader className="py-4 border-b border-border bg-background/50 flex flex-row items-center justify-between">
+                <div className="flex items-center gap-3">
+                    <div className="p-2 bg-muted cyber-chamfer-sm border border-border group-hover/wallet:border-accent transition-colors">
+                        <WalletIcon className="size-5 text-accent" strokeWidth={1.5} />
+                    </div>
+                    <div className="flex flex-col">
+                        <CardTitle className="text-sm font-mono uppercase tracking-widest text-foreground">
+                            {wallet.exchange}
+                        </CardTitle>
+                        <span className="text-sm text-muted-foreground font-mono tracking-widest">{wallet.account_type}</span>
+                    </div>
+                </div>
+                <div className="text-sm font-mono font-bold text-muted-foreground">{wallet.account_name}</div>
+            </CardHeader>
+
+            <CardContent className="p-4 flex-1 flex flex-col gap-4">
+                <div className="flex flex-col gap-1">
+                    <span className="text-xs text-muted-foreground uppercase tracking-widest">CURRENT_BALANCE</span>
+                    <span className="text-2xl font-mono text-foreground">{formatCurrency(wallet.wallet_balance)}</span>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                    <div className="flex flex-col gap-1">
+                        <span className="text-xs text-muted-foreground uppercase tracking-widest">UNREALIZED_PNL</span>
+                        <span className={wallet.unrealized_pnl >= 0 ? "text-accent font-mono" : "text-destructive font-mono"}>
+                            {wallet.unrealized_pnl >= 0 ? '+' : ''}{formatCurrency(wallet.unrealized_pnl)}
+                        </span>
+                    </div>
+                    <div className="flex flex-col gap-1">
+                        <span className="text-xs text-muted-foreground uppercase tracking-widest">TOTAL_PNL</span>
+                        <span className={wallet.total_realized_pnl >= 0 ? "text-accent font-mono" : "text-destructive font-mono"}>
+                            {wallet.total_realized_pnl >= 0 ? '+' : ''}{formatCurrency(wallet.total_realized_pnl)}
+                        </span>
+                    </div>
+                </div>
+
+                <div className="grid grid-cols-3 gap-2 pt-4 border-t border-border/50">
+                    <div className="flex flex-col items-center gap-1">
+                        <span className="text-sm font-mono text-foreground">{wallet.total_strategies}</span>
+                        <span className="text-xs text-muted-foreground uppercase tracking-wider text-center">STRATS</span>
+                    </div>
+                    <div className="flex flex-col items-center gap-1 border-x border-border/50">
+                        <span className="text-sm font-mono text-foreground">{wallet.active_positions}</span>
+                        <span className="text-xs text-muted-foreground uppercase tracking-wider text-center">POSITIONS</span>
+                    </div>
+                    <div className="flex flex-col items-center gap-1">
+                        <span className="text-sm font-mono text-foreground">{wallet.open_orders}</span>
+                        <span className="text-xs text-muted-foreground uppercase tracking-wider text-center">ORDERS</span>
+                    </div>
+                </div>
+            </CardContent>
+
+            <CardFooter className="p-4 border-t border-border bg-background/30 flex gap-2 justify-end" onClick={(e) => e.stopPropagation()}>
+                <Dialog open={open} onOpenChange={setOpen}>
+                    <DialogTrigger render={<Button variant="cyber-outline" size="sm" />}>
+                        EDIT_KEYS
+                    </DialogTrigger>
+                    <DialogContent>
+                        <DialogHeader>
+                            <DialogTitle>EDIT_API_KEYS</DialogTitle>
+                        </DialogHeader>
+                        <div className="flex flex-col gap-4 py-4">
+                            <div className="flex flex-col gap-2">
+                                <label className="text-[10px] text-muted-foreground uppercase tracking-widest font-mono">API_KEY</label>
+                                <Input
+                                    placeholder="••••••••"
+                                    value={apiKey}
+                                    onChange={(e) => setApiKey(e.target.value)}
+                                />
                             </div>
-                            <Badge variant={wallet.apiStatus === 'CONNECTED' ? 'cyber-active' : 'cyber-error'}>
-                                {wallet.apiStatus}
-                            </Badge>
-                        </CardHeader>
-                        
-                        <CardContent className="p-4 flex-1 flex flex-col gap-4">
-                            <div className="flex flex-col gap-1">
-                                <span className="text-[10px] text-muted-foreground uppercase tracking-widest">CURRENT_BALANCE</span>
-                                <span className="text-2xl font-mono text-foreground">${wallet.currentBalance.toLocaleString()}</span>
+                            <div className="flex flex-col gap-2">
+                                <label className="text-[10px] text-muted-foreground uppercase tracking-widest font-mono">API_SECRET</label>
+                                <Input
+                                    placeholder="••••••••"
+                                    type="password"
+                                    value={apiSecret}
+                                    onChange={(e) => setApiSecret(e.target.value)}
+                                />
                             </div>
-                            
-                            <div className="grid grid-cols-2 gap-4">
-                                <div className="flex flex-col gap-1">
-                                    <span className="text-[10px] text-muted-foreground uppercase tracking-widest">UNREALIZED_PNL</span>
-                                    <span className={wallet.unrealizedPnl >= 0 ? "text-accent font-mono" : "text-destructive font-mono"}>
-                                        {wallet.unrealizedPnl >= 0 ? '+' : ''}${wallet.unrealizedPnl.toLocaleString()}
-                                    </span>
-                                </div>
-                                <div className="flex flex-col gap-1">
-                                    <span className="text-[10px] text-muted-foreground uppercase tracking-widest">TOTAL_PNL</span>
-                                    <span className={wallet.totalPnl >= 0 ? "text-accent font-mono" : "text-destructive font-mono"}>
-                                        {wallet.totalPnl >= 0 ? '+' : ''}${wallet.totalPnl.toLocaleString()}
-                                    </span>
-                                </div>
-                            </div>
-                            
-                            <div className="grid grid-cols-3 gap-2 pt-4 border-t border-border/50">
-                                <div className="flex flex-col items-center gap-1">
-                                    <span className="text-sm font-mono text-foreground">{wallet.strategiesAssigned}</span>
-                                    <span className="text-[9px] text-muted-foreground uppercase tracking-wider text-center">STRATS</span>
-                                </div>
-                                <div className="flex flex-col items-center gap-1 border-x border-border/50">
-                                    <span className="text-sm font-mono text-foreground">{wallet.activePositionsCount}</span>
-                                    <span className="text-[9px] text-muted-foreground uppercase tracking-wider text-center">POSITIONS</span>
-                                </div>
-                                <div className="flex flex-col items-center gap-1">
-                                    <span className="text-sm font-mono text-foreground">{wallet.openOrdersCount}</span>
-                                    <span className="text-[9px] text-muted-foreground uppercase tracking-wider text-center">ORDERS</span>
-                                </div>
-                            </div>
-                        </CardContent>
-                        
-                        <CardFooter className="p-4 border-t border-border bg-background/30 flex gap-2 justify-end">
-                            <Button variant="cyber-outline" size="sm">EDIT_KEYS</Button>
-                            <Button variant="cyber-destructive" size="sm">REMOVE</Button>
-                        </CardFooter>
-                    </Card>
-                ))}
-            </div>
+                        </div>
+                        <DialogFooter>
+                            <Button
+                                variant="cyber-glitch"
+                                onClick={handleSave}
+                                disabled={isPending || !apiKey || !apiSecret}
+                            >
+                                {isPending ? 'SAVING...' : 'SAVE'}
+                            </Button>
+                        </DialogFooter>
+                    </DialogContent>
+                </Dialog>
+            </CardFooter>
+        </Card>
+    )
+}
+
+export default function WalletsPage() {
+    const { data: wallets, isLoading, isError } = useWallets()
+
+    return (
+        <PageWrapper
+            title="EXCHANGE WALLETS"
+        >
+            {isError ? (
+                <EmptyState message="FAILED_TO_LOAD_WALLETS" />
+            ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {isLoading ? (
+                        Array.from({ length: 3 }).map((_, i) => (
+                            <Card key={i} className="border-border bg-card cyber-chamfer h-64 animate-pulse" />
+                        ))
+                    ) : wallets?.map((wallet: any) => (
+                        <WalletCard key={wallet.account_name} wallet={wallet} />
+                    ))}
+                </div>
+            )}
         </PageWrapper>
     )
 }

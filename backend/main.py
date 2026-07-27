@@ -22,6 +22,7 @@ from backend.routes.strategies import router as strategies_router
 from backend.routes.models import router as models_router
 from backend.routes.executions import router as executions_router
 from backend.routes.wallets import router as wallets_router
+from backend.routes.backtest import router as backtest_router
 
 
 # App
@@ -54,6 +55,7 @@ app.include_router(strategies_router)
 app.include_router(models_router)
 app.include_router(executions_router)
 app.include_router(wallets_router)
+app.include_router(backtest_router)
 
 # Health check
 

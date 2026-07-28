@@ -49,10 +49,8 @@ export default function ModelsPage() {
                 const isRegression = row.model_type === 'regression'
                 const score = row.score !== null && row.score !== undefined ? Number(row.score) : null
                 const displayScore = score === null || Number.isNaN(score)
-                    ? 'N/A'
-                    : isRegression
-                        ? score.toFixed(4)
-                        : `${(score * 100).toFixed(2)}%`
+                    ? `${(0.00).toFixed(2)}%`
+                    : `${(score * 100).toFixed(2)}%`
 
                 return (
                     <span className="text-secondary text-center">

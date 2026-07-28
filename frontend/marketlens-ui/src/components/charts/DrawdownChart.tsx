@@ -37,14 +37,14 @@ export function DrawdownChart({ data, title = "DRAWDOWN", height = 200 }: Drawdo
                                 </linearGradient>
                             </defs>
                             <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
-                            <XAxis 
-                                dataKey="date" 
+                            <XAxis
+                                dataKey="date"
                                 tick={{ fill: 'var(--muted-foreground)', fontSize: 10, fontFamily: 'monospace' }}
                                 tickLine={false}
                                 axisLine={{ stroke: 'var(--border)' }}
                                 minTickGap={30}
                             />
-                            <YAxis 
+                            <YAxis
                                 tick={{ fill: 'var(--muted-foreground)', fontSize: 10, fontFamily: 'monospace' }}
                                 tickLine={false}
                                 axisLine={{ stroke: 'var(--border)' }}
@@ -62,6 +62,7 @@ export function DrawdownChart({ data, title = "DRAWDOWN", height = 200 }: Drawdo
                                 }}
                                 itemStyle={{ color: 'var(--destructive)' }}
                                 labelStyle={{ color: 'var(--muted-foreground)', marginBottom: '5px' }}
+                                formatter={(val: any) => `${Number(val).toFixed(4)}%`}
                             />
                             <Area
                                 type="step"

@@ -111,7 +111,7 @@ export default function BacktestDetailPage() {
         },
         { header: 'ENTRY PRICE', cell: (r: any) => r.entry_price != null ? `$${Number(r.entry_price).toFixed(2)}` : '-' },
         { header: 'EXIT PRICE', cell: (r: any) => r.exit_price != null ? `$${Number(r.exit_price).toFixed(2)}` : '-' },
-        { header: 'QTY', accessorKey: 'quantity' as any },
+        { header: 'QTY', cell: (r: any) => r.quantity != null ? Number(r.quantity).toFixed(4) : '-' },
         { header: 'GROSS PNL', cell: (r: any) => r.gross_pnl != null ? `$${Number(r.gross_pnl).toFixed(2)}` : '-' },
         { header: 'COMMISSION', cell: (r: any) => r.commission != null ? `$${Number(r.commission).toFixed(2)}` : '-' },
         { header: 'SLIPPAGE', cell: (r: any) => r.slippage != null ? `$${Number(r.slippage).toFixed(2)}` : '-' },
@@ -203,6 +203,9 @@ export default function BacktestDetailPage() {
                                         <Tooltip
                                             cursor={{ fill: 'rgba(255, 255, 255, 0.05)' }}
                                             contentStyle={{ backgroundColor: 'hsl(var(--card))', borderColor: 'hsl(var(--border))', borderRadius: '0' }}
+                                            itemStyle={{ color: '#ffffff' }}
+                                            labelStyle={{ color: '#ffffff' }}
+                                            formatter={(val: any) => `${Number(val).toFixed(4)}%`}
                                         />
                                         <Bar dataKey="return" radius={[2, 2, 0, 0]}>
                                             {(monthly_returns || []).map((entry: any, index: number) => (
@@ -216,7 +219,7 @@ export default function BacktestDetailPage() {
                     </TabsContent>
 
                     <TabsContent value="winloss">
-                        <PieChart winRate={winRate} height={320} />
+                        <PieChart winRate={(summary.win_rate ?? 0) / 100} height={320} />
                     </TabsContent>
                 </Tabs>
             </div>

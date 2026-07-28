@@ -74,6 +74,7 @@ function PnlChart({ data, title }: { data: any, title: string }) {
                                 cursor={{ fill: 'rgba(255, 255, 255, 0.05)' }}
                                 contentStyle={{ backgroundColor: 'hsl(var(--card))', borderColor: 'hsl(var(--border))', borderRadius: '0px' }}
                                 itemStyle={{ color: 'hsl(var(--foreground))', fontFamily: 'monospace' }}
+                                formatter={(val: any) => `${Number(val).toFixed(3)}`}
                             />
                             <Bar dataKey="value" radius={[2, 2, 0, 0]}>
                                 {chartData.map((entry, index) => (

@@ -13,6 +13,7 @@ import { PieChart } from '@/components/charts/PieChart'
 import { useStrategyDetail } from '@/hooks/useStrategies'
 import { Skeleton } from '@/components/ui/skeleton'
 import { EmptyState } from '@/components/shared/EmptyState'
+import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Cell } from 'recharts'
 
 
 type MetricFormat = 'percent' | 'ratio' | 'currency' | 'integer' | 'raw'
@@ -87,6 +88,68 @@ function formatMetric(value: number | undefined, format: MetricFormat): string {
     }
 }
 
+
+function PnlChart({ data, title, useTradeIndex = false }: { data: any, title: string, useTradeIndex?: boolean }) {
+    // Convert object to array if needed
+    let chartData = Array.isArray(data) ? data : Object.entries(data || {}).map(([name, value]) => ({ name, value }))
+    // standardize names
+    chartData = chartData.map((item, index) => {
+        let name = item.name || item.symbol || item.hour || item.day || Object.keys(item)[0]
+        if (typeof name === 'string') {
+            name = name.replace(/USDT$/i, '')
+            if (title.toUpperCase().includes('DOW')) {
+                name = name.slice(0, 3).toUpperCase()
+            }
+        }
+        return {
+            name: useTradeIndex ? index + 1 : name,
+            value: item.value ?? item.pnl ?? Object.values(item)[0]
+        }
+    })
+
+    // Widen the chart horizontally once there are enough bars that a fixed-width
+    // container would squash them together.
+    const MIN_PX_PER_BAR = 18
+    const computedWidth = chartData.length * MIN_PX_PER_BAR
+
+    return (
+        <Card className="border-border bg-card cyber-chamfer">
+            <CardHeader className="p-4 border-b border-border/50">
+                <CardTitle className="text-sm font-mono uppercase tracking-widest text-secondary">{title}</CardTitle>
+            </CardHeader>
+            <CardContent className="p-4 h-64">
+                {chartData.length > 0 ? (
+                    <div className="w-full h-full overflow-x-auto overflow-y-hidden">
+                        <div style={{ width: Math.max(computedWidth, 100), height: '100%', minWidth: '100%' }}>
+                            <ResponsiveContainer width="100%" height="100%">
+                                <BarChart data={chartData}>
+                                    <XAxis dataKey="name" stroke="#888888" fontSize={10} tickLine={false} axisLine={false} interval={0} />
+                                    <YAxis stroke="#888888" fontSize={10} tickLine={false} axisLine={false} tickFormatter={(val) => `$${val}`} />
+                                    <Tooltip
+                                        cursor={{ fill: 'rgba(255, 255, 255, 0.05)' }}
+                                        contentStyle={{ backgroundColor: 'hsl(var(--card))', borderColor: 'hsl(var(--border))', borderRadius: '0px' }}
+                                        itemStyle={{ color: 'hsl(var(--foreground))', fontFamily: 'monospace' }}
+                                        formatter={(val: any) => `${Number(val).toFixed(3)}`}
+                                        labelFormatter={(label: any) => useTradeIndex ? `TRADE #${label}` : label}
+                                    />
+                                    <Bar dataKey="value" radius={[2, 2, 0, 0]}>
+                                        {chartData.map((entry, index) => (
+                                            <Cell key={`cell-${index}`} fill={Number(entry.value) >= 0 ? "var(--accent)" : "var(--destructive)"} />
+                                        ))}
+                                    </Bar>
+                                </BarChart>
+                            </ResponsiveContainer>
+                        </div>
+                    </div>
+                ) : (
+                    <div className="h-full flex items-center justify-center">
+                        <span className="text-xs text-muted-foreground font-mono uppercase">NO_DATA</span>
+                    </div>
+                )}
+            </CardContent>
+        </Card>
+    )
+}
 
 function buildHeatmapData(monthlyReturns: { month: string; return: number }[]) {
     const byYear: Record<number, (number | null)[]> = {}
@@ -347,6 +410,7 @@ export default function StrategyDetailPage() {
                             <DrawdownChart data={chart_data?.drawdown || []} />
                             <ReturnsHeatmap data={buildHeatmapData(chart_data?.monthly_returns || [])} />
                             <PieChart winRate={performance?.win_rate || 0} />
+                            <PnlChart title="PNL BY TRADES" data={chart_data?.pnl_by_trade || []} useTradeIndex />
                         </TabsContent>
                         <TabsContent value="trades" className="mt-4">
                             <DataTable data={recent_trades || []} columns={tradeColumns} emptyMessage="NO_RECENT_TRADES_FOUND" />

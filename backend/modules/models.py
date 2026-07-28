@@ -41,12 +41,13 @@ def get_all_models():
             timeframe = dataset_info.get("timeframe", "unknown")
             
             score = None
-            primary_metric = "accuracy" if model_type == "classification" else "mse"
+            primary_metric = "avg_return"
             
             if os.path.exists(metrics_path):
                 try:
                     with open(metrics_path, "r") as f:
                         metrics = json.load(f)
+                    metrics = metrics["backtest_stats"]
                     score = metrics.get(primary_metric)
                 except Exception:
                     pass

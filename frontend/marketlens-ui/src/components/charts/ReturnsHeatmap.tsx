@@ -55,10 +55,10 @@ export function ReturnsHeatmap({ data, title = "MONTHLY-RETURNS HEATMAP" }: Retu
                                     <div
                                         key={j}
                                         className={cn(
-                                            "text-xs font-mono flex items-center justify-center py-2 transition-colors cursor-default hover:brightness-125 border border-border/50",
+                                            "text-xs font-mono flex items-center justify-center py-2 transition-colors cursor-default hover:text-[#00d4ff] border border-border/50",
                                             getColorClass(val)
                                         )}
-                                        title={val !== null ? `$${val}` : 'No data'}
+                                        title={val !== null ? `$${val.toFixed(2)}` : 'No data'}
                                     >
                                         {val !== null ? val > 0 ? `+$${val.toFixed(1)}` : `$${val.toFixed(1)}` : '-'}
                                     </div>

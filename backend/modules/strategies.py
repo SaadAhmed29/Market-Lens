@@ -171,6 +171,7 @@ def get_strategy_detail(strategy_name: str) -> dict:
         equity_curve = []
         drawdown_data = []
         monthly_returns = []
+        pnl_by_trade = []
 
         try:
             # Load full ledger via pandas
@@ -215,6 +216,8 @@ def get_strategy_detail(strategy_name: str) -> dict:
                     dd = ((bal - running_max) / running_max * 100) if running_max > 0 else 0
                     drawdown_data.append({"date": dt, "value": dd})
 
+                    pnl_by_trade.append({"date": dt, "value": float(r.get("net_pnl", 0))})
+
                 # Monthly Returns
                 if "exit_time" in df.columns:
                     df["month"] = pd.to_datetime(df["exit_time"]).dt.strftime('%Y-%m')
@@ -244,5 +247,6 @@ def get_strategy_detail(strategy_name: str) -> dict:
             "equity_curve": equity_curve,
             "drawdown": drawdown_data,
             "monthly_returns": monthly_returns,
+            "pnl_by_trade": pnl_by_trade,
         }
     }

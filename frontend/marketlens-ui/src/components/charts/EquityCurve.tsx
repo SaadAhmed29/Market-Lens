@@ -79,6 +79,7 @@ export function EquityCurve({ data, title = "EQUITY CURVE", height = 300 }: Equi
                                 }}
                                 itemStyle={{ color: 'var(--accent)' }}
                                 labelStyle={{ color: 'var(--muted-foreground)', marginBottom: '5px' }}
+                                formatter={(val: any) => `${Number(val).toFixed(4)}`}
                             />
                             <Area
                                 type="step"

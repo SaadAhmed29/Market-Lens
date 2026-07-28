@@ -53,7 +53,7 @@ export default function RootLayout({
       lang="en"
       className={`dark ${orbitron.variable} ${jetBrainsMono.variable} bg-background text-foreground`}
     >
-      <body className="font-mono antialiased min-h-screen scanline-overlay relative overflow-x-hidden selection:bg-accent/30 selection:text-accent">
+      <body className="font-mono antialiased min-h-screen relative overflow-x-hidden selection:bg-accent/30 selection:text-accent">
         <Providers>
           <TooltipProvider>{children}</TooltipProvider>
         </Providers>

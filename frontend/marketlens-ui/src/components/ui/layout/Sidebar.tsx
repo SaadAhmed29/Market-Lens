@@ -112,7 +112,7 @@ export function AppSidebar() {
                             </div>
                             <div className="flex min-w-0 flex-col leading-tight ml-2">
                                 <span className="truncate text-xs font-mono font-bold text-foreground tracking-wide">
-                                    ALEX_MORGAN
+                                    main
                                 </span>
                                 <span className="truncate text-[0.6rem] uppercase font-mono tracking-widest text-accent mt-1">
                                     [ ROOT_ACCESS ]

@@ -22,21 +22,14 @@ export function Topbar() {
                 <Terminal className="size-4" strokeWidth={1.5} />
                 <span className="text-xs font-mono uppercase tracking-widest hidden sm:inline-block">SYS.STATUS: <span className="animate-pulse">ONLINE</span></span>
             </div>
-            
-            <div className="ml-auto flex items-center gap-4">
-                <div className="hidden sm:flex items-center text-xs font-mono text-muted-foreground tabular-nums">
+
+            <div className="ml-auto flex items-center gap-6">
+                <div className="hidden sm:flex items-center text-sm font-mono text-muted-foreground tabular-nums">
                     {time ? time.toISOString().replace('T', ' ').substring(0, 19) + ' UTC' : '...'}
                 </div>
-                
-                <div className="relative group hidden md:block">
-                    <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 size-4 text-muted-foreground group-focus-within:text-accent transition-colors" strokeWidth={1.5} />
-                    <input 
-                        type="text" 
-                        placeholder="Search markets..." 
-                        className="h-8 w-64 rounded-none border border-border bg-background/50 pl-9 pr-3 text-xs font-mono uppercase tracking-wider text-foreground placeholder:text-muted-foreground/50 focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent cyber-chamfer-sm transition-all"
-                    />
-                </div>
-                
+
+
+
                 <button
                     type="button"
                     className="relative flex size-8 items-center justify-center border border-border bg-background text-muted-foreground transition-colors hover:text-accent hover:border-accent cyber-chamfer-sm"

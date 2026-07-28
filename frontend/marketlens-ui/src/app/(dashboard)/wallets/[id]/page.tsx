@@ -1,6 +1,6 @@
 'use client'
 
-import React from 'react'
+import React, { useState, useMemo, useEffect } from 'react'
 import { useParams } from 'next/navigation'
 import { PageWrapper } from '@/components/layout/PageWrapper'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -9,6 +9,8 @@ import { EmptyState } from '@/components/shared/EmptyState'
 import { DataTable } from '@/components/shared/DataTable'
 import { useWalletDetail } from '@/hooks/useWallets'
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Cell } from 'recharts'
+
+const HISTORY_PAGE_SIZE = 10
 
 function formatCurrency(val: number) {
     return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(val || 0)
@@ -96,6 +98,14 @@ export default function WalletDetailPage() {
 
     const { data, isLoading, isError } = useWalletDetail(accountName)
 
+    const [historyPage, setHistoryPage] = useState(1)
+
+    const rawHistory = useMemo(() => data?.history || [], [data?.history])
+
+    useEffect(() => {
+        setHistoryPage(1)
+    }, [rawHistory])
+
     if (isLoading) {
         return (
             <PageWrapper title={`WALLET_${accountName?.toUpperCase() || 'LOADING'}`}>
@@ -137,6 +147,13 @@ export default function WalletDetailPage() {
         { header: 'FEE', cell: (row: any) => formatCurrency(row.fee) },
         { header: 'TYPE', accessorKey: 'order_type' as keyof any },
     ]
+
+    const historyTotalPages = Math.max(1, Math.ceil(rawHistory.length / HISTORY_PAGE_SIZE))
+    const historyCurrentPage = Math.min(historyPage, historyTotalPages)
+    const paginatedHistory = rawHistory.slice(
+        (historyCurrentPage - 1) * HISTORY_PAGE_SIZE,
+        historyCurrentPage * HISTORY_PAGE_SIZE
+    )
 
     return (
         <PageWrapper title={`WALLET_${accountName.toUpperCase()}`}>
@@ -199,7 +216,29 @@ export default function WalletDetailPage() {
             {/* History Table */}
             <div className="mb-6">
                 <h3 className="text-sm font-mono uppercase tracking-widest text-secondary mb-4">EXECUTION_HISTORY</h3>
-                <DataTable data={history || []} columns={columns} />
+                <DataTable data={paginatedHistory} columns={columns} />
+
+                {rawHistory.length > HISTORY_PAGE_SIZE && (
+                    <div className="flex items-center justify-between mt-4 font-mono text-xs uppercase tracking-widest text-muted-foreground">
+                        <button
+                            onClick={() => setHistoryPage((p) => Math.max(1, p - 1))}
+                            disabled={historyCurrentPage === 1}
+                            className="px-3 py-1.5 border border-border cyber-chamfer disabled:opacity-40 disabled:cursor-not-allowed hover:text-accent hover:border-accent/50 transition-colors"
+                        >
+                            &lt; PREV
+                        </button>
+                        <span>
+                            PAGE {historyCurrentPage} / {historyTotalPages}
+                        </span>
+                        <button
+                            onClick={() => setHistoryPage((p) => Math.min(historyTotalPages, p + 1))}
+                            disabled={historyCurrentPage === historyTotalPages}
+                            className="px-3 py-1.5 border border-border cyber-chamfer disabled:opacity-40 disabled:cursor-not-allowed hover:text-accent hover:border-accent/50 transition-colors"
+                        >
+                            NEXT &gt;
+                        </button>
+                    </div>
+                )}
             </div>
 
         </PageWrapper>

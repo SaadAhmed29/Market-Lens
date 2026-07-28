@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { PageWrapper } from '@/components/layout/PageWrapper'
 import { DataTable, Column } from '@/components/shared/DataTable'
@@ -10,6 +10,8 @@ import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { EmptyState } from '@/components/shared/EmptyState'
 import { useBacktests, useBacktestOptions, useSubmitBacktest } from '@/hooks/useBacktests'
+
+const BACKTESTS_PAGE_SIZE = 10
 
 export default function BacktestsPage() {
     const router = useRouter()
@@ -37,6 +39,14 @@ export default function BacktestsPage() {
     const [slEnabled, setSlEnabled] = useState(false)
     const [slType, setSlType] = useState('percentage')
     const [slValue, setSlValue] = useState(1.0)
+
+    const [page, setPage] = useState(1)
+
+    const rawBacktests = useMemo(() => backtests || [], [backtests])
+
+    useEffect(() => {
+        setPage(1)
+    }, [rawBacktests])
 
     // Autofill when strategy changes
     useEffect(() => {
@@ -121,6 +131,13 @@ export default function BacktestsPage() {
             }
         }
     ]
+
+    const totalPages = Math.max(1, Math.ceil(rawBacktests.length / BACKTESTS_PAGE_SIZE))
+    const currentPage = Math.min(page, totalPages)
+    const paginatedBacktests = rawBacktests.slice(
+        (currentPage - 1) * BACKTESTS_PAGE_SIZE,
+        currentPage * BACKTESTS_PAGE_SIZE
+    )
 
     return (
         <PageWrapper title="BACKTEST ENGINE">
@@ -301,13 +318,37 @@ export default function BacktestsPage() {
             {isError ? (
                 <EmptyState message="FAILED_TO_LOAD_BACKTESTS" />
             ) : (
-                <DataTable
-                    data={backtests || []}
-                    columns={columns}
-                    isLoading={isBacktestsLoading}
-                    onRowClick={(row) => row.status === 'Completed' && router.push(`/backtests/${row.request_id}`)}
-                    emptyMessage="NO_BACKTESTS_FOUND"
-                />
+                <>
+                    <DataTable
+                        data={paginatedBacktests}
+                        columns={columns}
+                        isLoading={isBacktestsLoading}
+                        onRowClick={(row) => row.status === 'Completed' && router.push(`/backtests/${row.request_id}`)}
+                        emptyMessage="NO_BACKTESTS_FOUND"
+                    />
+
+                    {!isBacktestsLoading && rawBacktests.length > BACKTESTS_PAGE_SIZE && (
+                        <div className="flex items-center justify-between mt-4 font-mono text-xs uppercase tracking-widest text-muted-foreground">
+                            <button
+                                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                                disabled={currentPage === 1}
+                                className="px-3 py-1.5 border border-border cyber-chamfer disabled:opacity-40 disabled:cursor-not-allowed hover:text-accent hover:border-accent/50 transition-colors"
+                            >
+                                &lt; PREV
+                            </button>
+                            <span>
+                                PAGE {currentPage} / {totalPages}
+                            </span>
+                            <button
+                                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                                disabled={currentPage === totalPages}
+                                className="px-3 py-1.5 border border-border cyber-chamfer disabled:opacity-40 disabled:cursor-not-allowed hover:text-accent hover:border-accent/50 transition-colors"
+                            >
+                                NEXT &gt;
+                            </button>
+                        </div>
+                    )}
+                </>
             )}
         </PageWrapper>
     )

@@ -1,6 +1,6 @@
 'use client'
 
-import React from 'react'
+import React, { useState, useMemo, useEffect } from 'react'
 import { useParams } from 'next/navigation'
 import { PageWrapper } from '@/components/layout/PageWrapper'
 import { Card, CardContent } from '@/components/ui/card'
@@ -14,6 +14,8 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { EquityCurve } from '@/components/charts/EquityCurve'
 import { DrawdownChart } from '@/components/charts/DrawdownChart'
 import { PieChart } from '@/components/charts/PieChart'
+
+const LEDGER_PAGE_SIZE = 10
 
 function StatCard({ title, value, colored = false, formatFn }: { title: string, value: any, colored?: boolean, formatFn?: (v: number) => string }) {
     let formattedValue = value
@@ -41,6 +43,14 @@ export default function BacktestDetailPage() {
     const requestId = params.id as string
 
     const { data, isLoading, isError } = useBacktestDetail(requestId)
+
+    const [ledgerPage, setLedgerPage] = useState(1)
+
+    const rawLedger = useMemo(() => data?.ledger || [], [data?.ledger])
+
+    useEffect(() => {
+        setLedgerPage(1)
+    }, [rawLedger])
 
     if (isLoading) {
         return (
@@ -115,6 +125,13 @@ export default function BacktestDetailPage() {
         },
         { header: 'BALANCE', cell: (r: any) => r.balance_after_trade != null ? `$${Number(r.balance_after_trade).toFixed(2)}` : '-' }
     ]
+
+    const ledgerTotalPages = Math.max(1, Math.ceil(rawLedger.length / LEDGER_PAGE_SIZE))
+    const ledgerCurrentPage = Math.min(ledgerPage, ledgerTotalPages)
+    const paginatedLedger = rawLedger.slice(
+        (ledgerCurrentPage - 1) * LEDGER_PAGE_SIZE,
+        ledgerCurrentPage * LEDGER_PAGE_SIZE
+    )
 
     return (
         <PageWrapper title={`BT_${requestId.substring(0, 8)}`} actions={
@@ -206,8 +223,30 @@ export default function BacktestDetailPage() {
 
             {/* Ledger Table */}
             <div className="mb-6">
-                <h3 className="text-sm font-mono uppercase tracking-widest text-muted-foreground mb-4">TRADE_LEDGER</h3>
-                <DataTable data={ledger || []} columns={ledgerColumns} emptyMessage="NO_TRADES_EXECUTED" />
+                <h3 className="text-sm font-mono uppercase tracking-widest text-muted-foreground mb-4">TRADE LEDGER</h3>
+                <DataTable data={paginatedLedger} columns={ledgerColumns} emptyMessage="NO_TRADES_EXECUTED" />
+
+                {rawLedger.length > LEDGER_PAGE_SIZE && (
+                    <div className="flex items-center justify-between mt-4 font-mono text-xs uppercase tracking-widest text-muted-foreground">
+                        <button
+                            onClick={() => setLedgerPage((p) => Math.max(1, p - 1))}
+                            disabled={ledgerCurrentPage === 1}
+                            className="px-3 py-1.5 border border-border cyber-chamfer disabled:opacity-40 disabled:cursor-not-allowed hover:text-accent hover:border-accent/50 transition-colors"
+                        >
+                            &lt; PREV
+                        </button>
+                        <span>
+                            PAGE {ledgerCurrentPage} / {ledgerTotalPages}
+                        </span>
+                        <button
+                            onClick={() => setLedgerPage((p) => Math.min(ledgerTotalPages, p + 1))}
+                            disabled={ledgerCurrentPage === ledgerTotalPages}
+                            className="px-3 py-1.5 border border-border cyber-chamfer disabled:opacity-40 disabled:cursor-not-allowed hover:text-accent hover:border-accent/50 transition-colors"
+                        >
+                            NEXT &gt;
+                        </button>
+                    </div>
+                )}
             </div>
         </PageWrapper>
     )

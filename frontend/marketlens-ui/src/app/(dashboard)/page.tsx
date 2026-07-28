@@ -169,7 +169,7 @@ export default function DashboardPage() {
             <div className="mt-8">
                 <div className="flex items-center gap-2 mb-4">
                     <span className="text-accent">&gt;</span>
-                    <h2 className="text-2xl sm:text-3xl font-heading font-bold uppercase tracking-wider text-foreground cyber-glitch">STRATEGIES_OVERVIEW</h2>
+                    <h2 className="text-2xl sm:text-3xl font-heading font-bold uppercase tracking-wider text-foreground cyber-glitch">STRATEGIES OVERVIEW</h2>
                 </div>
 
                 {/* Filter / Sort Bar */}

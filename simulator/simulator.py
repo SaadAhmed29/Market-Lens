@@ -6,6 +6,13 @@ import sys
 from pathlib import Path
 import logging
 
+from backend.modules.strategy_builder import (
+    _generate_strategy_signals,
+    _generate_model_signals,
+    _combine_signals,
+    get_strategy_options,
+)
+
 logger = logging.getLogger(__name__)
 
 # Ensure project root is on sys.path when running the script directly
@@ -72,6 +79,76 @@ def calculate_lookback_start(config: dict, indicators_config: dict) -> str:
     start_dt = (datetime.now(timezone.utc) - total_duration).strftime("%Y-%m-%d")
     return start_dt
 
+# Keys in a saved combination config that are NOT sub-strategy names.
+# Everything else in the dict is treated as {"<strategy_name>": {"long": ..., "short": ...}}.
+_COMBINATION_META_KEYS = {
+    "symbol", "exchange", "timehorizon",
+    "allow_execution", "allow_simulation",
+    "allow_combination", "combination_rule", "model",
+}
+
+
+def _generate_combination_signals(strategy_name: str, strategy_config: dict, exchange: str,
+                                    symbol: str, time_horizon: str, start_dt: str, end_dt: str) -> pd.DataFrame:
+    """Generate signals for a saved strategy/model combination (allow_combination=True),
+    mirroring strategy_builder's strategy_combination / strategy_model_combination modes.
+
+    strategy_config looks like:
+        {
+            "symbol": ..., "exchange": ..., "timehorizon": ...,
+            "<sub_strategy_name>": {"long": {...}, "short": {...}},
+            ...
+            "model": "<model_name>" | ["<model_name>", ...],   # optional
+            "combination_rule": "AND" | "OR",
+            "allow_combination": True
+        }
+    """
+    combination_rule = strategy_config.get('combination_rule', 'AND')
+    sub_strategy_names = [k for k in strategy_config.keys() if k not in _COMBINATION_META_KEYS]
+
+    model_field = strategy_config.get('model')
+    model_names = model_field if isinstance(model_field, list) else ([model_field] if model_field else [])
+
+    # Shared date-range/instrument config used for every sub-signal generation call.
+    signal_gen_config = {
+        'exchange': exchange,
+        'symbol': symbol,
+        'timehorizon': time_horizon,
+        'start_date': start_dt,
+        'end_date': end_dt,
+    }
+
+    sig_list = []
+
+    for sname in sub_strategy_names:
+        try:
+            sdf = _generate_strategy_signals(sname, signal_gen_config)
+            if sdf is not None and not sdf.empty:
+                sig_list.append(sdf)
+        except Exception as e:
+            logger.error(f"[{strategy_name}] Failed to generate signals for sub-strategy '{sname}': {e}")
+
+    if model_names:
+        try:
+            available_models = get_strategy_options().get('models', [])
+        except Exception as e:
+            logger.error(f"[{strategy_name}] Failed to load model options: {e}")
+            available_models = []
+
+        for mname in model_names:
+            model_info = next((m for m in available_models if m.get('model_name') == mname), None)
+            if model_info is None:
+                logger.error(f"[{strategy_name}] Model '{mname}' not found on disk, skipping.")
+                continue
+            try:
+                mdf = _generate_model_signals(model_info, signal_gen_config)
+                if mdf is not None and not mdf.empty:
+                    sig_list.append(mdf)
+            except Exception as e:
+                logger.error(f"[{strategy_name}] Failed to generate signals for model '{mname}': {e}")
+
+    return _combine_signals(sig_list, combination_rule)
+
 def _update_simulation_stats(strategy_name: str, balance: float, sim_config: dict):
     from utils.db import get_engine
     import pandas as pd
@@ -80,7 +157,7 @@ def _update_simulation_stats(strategy_name: str, balance: float, sim_config: dic
         ledger = pd.read_sql(f"SELECT * FROM simulation_ledgers.{strategy_name.lower()}", engine)
         if ledger.empty:
             stats = {'final_balance': round(balance, 4), 'total_trades': 0}
-            stats.update({k: 0.0 for k in _SCALAR_METRIC_KEYS})
+            stats.update({k: 0.0 for k in SCALAR_METRIC_KEYS})
             stats['consecutive_losses'] = 0
             stats['consecutive_wins'] = 0        
         else:
@@ -277,20 +354,34 @@ def simulate_strategy(strategy_name: str, strategy_config: dict, exchange: str, 
             upsert_simulation_position(strategy_name, sim_pos)
             logger.info(f"[{strategy_name}] Position updated. Unrealized PnL: {unrealized:.2f}")
             
-    # Call get_signals
-    selected_indicators = _extract_indicators_for_strategy(strategy_config, indicator_config)
-    
-    signals = get_signal_df(
-        save_csv=False,
-        exchange=exchange,
-        symbol=symbol,
-        start=start_dt,
-        end=end_dt,
-        strategy_name=strategy_name,
-        selected_indicators=selected_indicators,
-        strategy_config=strategy_config
-    )
-    
+    # Call get_signals — branch on whether this is a saved combination config
+    # (see strategy_builder.save_strategy) or a plain single strategy.
+    allow_combination = strategy_config.get('allow_combination', False)
+
+    if allow_combination:
+        signals = _generate_combination_signals(
+            strategy_name=strategy_name,
+            strategy_config=strategy_config,
+            exchange=exchange,
+            symbol=symbol,
+            time_horizon=time_horizon,
+            start_dt=start_dt,
+            end_dt=end_dt,
+        )
+    else:
+        selected_indicators = _extract_indicators_for_strategy(strategy_config, indicator_config)
+
+        signals = get_signal_df(
+            save_csv=False,
+            exchange=exchange,
+            symbol=symbol,
+            start=start_dt,
+            end=end_dt,
+            strategy_name=strategy_name,
+            selected_indicators=selected_indicators,
+            strategy_config=strategy_config
+        )
+
     if signals is None or signals.empty:
         logger.info(f"[{strategy_name}] No signals generated.")
         return

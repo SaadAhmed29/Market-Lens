@@ -10,6 +10,7 @@ import {
     TerminalSquare,
     Wallet,
     Activity,
+    Wrench,
 } from 'lucide-react'
 
 import {
@@ -30,6 +31,7 @@ const navItems = [
     { title: 'Dashboard', url: '/', icon: LayoutDashboard },
     { title: 'Strategies', url: '/strategies', icon: LineChart },
     { title: 'Backtests', url: '/backtests', icon: Boxes },
+    { title: 'Strategy Builder', url: '/strategy-builder', icon: Wrench },
     { title: 'Wallets', url: '/wallets', icon: Wallet },
     { title: 'Executions', url: '/executions', icon: TerminalSquare },
     { title: 'ML Models', url: '/models', icon: BrainCircuit },
@@ -80,10 +82,10 @@ export function AppSidebar() {
                                         <SidebarMenuButton
                                             isActive={isActive}
                                             tooltip={item.title}
-                                            className={`h-11 py-3 transition-all duration-200 uppercase font-mono tracking-wider text-sm rounded-none ${isActive ? 'bg-accent/10 text-accent border-l-2 border-accent shadow-[inset_2px_0_0_0_var(--accent)]' : 'text-muted-foreground hover:bg-muted hover:text-foreground border-l-2 border-transparent'}`}
+                                            className={`h-9 py-2 transition-all duration-200 uppercase font-mono tracking-wider text-xs rounded-none ${isActive ? 'bg-accent/10 text-accent border-l-2 border-accent shadow-[inset_2px_0_0_0_var(--accent)]' : 'text-muted-foreground hover:bg-muted hover:text-foreground border-l-2 border-transparent'}`}
                                             render={
-                                                <Link href={item.url} className="flex items-center gap-3">
-                                                    <item.icon className={`size-4 ${isActive ? 'drop-shadow-[0_0_5px_currentColor]' : ''}`} strokeWidth={1.5} />
+                                                <Link href={item.url} className="flex items-center gap-1">
+                                                    <item.icon className={`size-3 ${isActive ? 'drop-shadow-[0_0_5px_currentColor]' : ''}`} strokeWidth={1.5} />
                                                     <span className="flex-1">
                                                         {isActive && !isCollapsed && <span className="mr-2 text-accent">&gt;</span>}
                                                         {item.title}

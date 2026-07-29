@@ -9,6 +9,13 @@ from datetime import datetime, timezone
 import pandas as pd
 import numpy as np
 
+from backend.modules.strategy_builder import (
+    _generate_strategy_signals,
+    _generate_model_signals,
+    _combine_signals,
+    get_strategy_options,
+)
+
 # Ensure project root is on sys.path
 root = Path(__file__).resolve().parent.parent
 if str(root) not in sys.path:
@@ -51,6 +58,21 @@ def get_qty_step(sym: str) -> tuple[float, float]:
     min_qty = float(lot_filter["minOrderQty"])
     _qty_step_cache[sym] = (qty_step, min_qty)
     return qty_step, min_qty
+
+
+def get_last_synthetic_balance(strategy_name: str) -> float:
+    """Return the most recent balance_after_trade (synthetic running balance)
+    for this strategy's execution ledger, or 50,000 if no rows exist yet."""
+    engine = get_engine()
+    table = f"execution_ledgers.{strategy_name.lower()}"
+    try:
+        with engine.connect() as conn:
+            val = conn.execute(
+                text(f'SELECT balance_after_trade FROM {table} ORDER BY exit_time DESC LIMIT 1')
+            ).scalar()
+        return float(val) if val is not None else 50000.0
+    except Exception:
+        return 50000.0
 
 
 def round_qty_to_step(qty: float, qty_step: float) -> float:
@@ -106,6 +128,76 @@ def calculate_lookback_start(config: dict, indicators_config: dict) -> str:
     start_dt = (datetime.now(timezone.utc) - total_duration).strftime("%Y-%m-%d")
     return start_dt
 
+# Keys in a saved combination config that are NOT sub-strategy names.
+# Everything else in the dict is treated as {"<strategy_name>": {"long": ..., "short": ...}}.
+_COMBINATION_META_KEYS = {
+    "symbol", "exchange", "timehorizon",
+    "allow_execution", "allow_simulation",
+    "allow_combination", "combination_rule", "model",
+}
+
+
+def _generate_combination_signals(strategy_name: str, strategy_config: dict, exchange: str,
+                                    symbol: str, time_horizon: str, start_dt: str, end_dt: str) -> pd.DataFrame:
+    """Generate signals for a saved strategy/model combination (allow_combination=True),
+    mirroring strategy_builder's strategy_combination / strategy_model_combination modes.
+
+    strategy_config looks like:
+        {
+            "symbol": ..., "exchange": ..., "timehorizon": ...,
+            "<sub_strategy_name>": {"long": {...}, "short": {...}},
+            ...
+            "model": "<model_name>" | ["<model_name>", ...],   # optional
+            "combination_rule": "AND" | "OR",
+            "allow_combination": True
+        }
+    """
+    combination_rule = strategy_config.get('combination_rule', 'AND')
+    sub_strategy_names = [k for k in strategy_config.keys() if k not in _COMBINATION_META_KEYS]
+
+    model_field = strategy_config.get('model')
+    model_names = model_field if isinstance(model_field, list) else ([model_field] if model_field else [])
+
+    # Shared date-range/instrument config used for every sub-signal generation call.
+    signal_gen_config = {
+        'exchange': exchange,
+        'symbol': symbol,
+        'timehorizon': time_horizon,
+        'start_date': start_dt,
+        'end_date': end_dt,
+    }
+
+    sig_list = []
+
+    for sname in sub_strategy_names:
+        try:
+            sdf = _generate_strategy_signals(sname, signal_gen_config)
+            if sdf is not None and not sdf.empty:
+                sig_list.append(sdf)
+        except Exception as e:
+            logger.error(f"[{strategy_name}] Failed to generate signals for sub-strategy '{sname}': {e}")
+
+    if model_names:
+        try:
+            available_models = get_strategy_options().get('models', [])
+        except Exception as e:
+            logger.error(f"[{strategy_name}] Failed to load model options: {e}")
+            available_models = []
+
+        for mname in model_names:
+            model_info = next((m for m in available_models if m.get('model_name') == mname), None)
+            if model_info is None:
+                logger.error(f"[{strategy_name}] Model '{mname}' not found on disk, skipping.")
+                continue
+            try:
+                mdf = _generate_model_signals(model_info, signal_gen_config)
+                if mdf is not None and not mdf.empty:
+                    sig_list.append(mdf)
+            except Exception as e:
+                logger.error(f"[{strategy_name}] Failed to generate signals for model '{mname}': {e}")
+
+    return _combine_signals(sig_list, combination_rule)
+
 def get_open_execution_position(strategy_name: str) -> dict | None:
     engine = get_engine()
     with engine.connect() as conn:
@@ -153,7 +245,7 @@ def update_execution_stats(strategy_name: str, balance: float):
             # Use the first balance_after_trade minus its net_pnl to get the initial balance before the first trade
             initial_balance = ledger['balance_after_trade'].iloc[0] - ledger['net_pnl'].iloc[0]
             if initial_balance <= 0:
-                initial_balance = 10000.0 # Fallback
+                initial_balance = 50000.0 # Fallback
                 
             first_time = ledger.index[0]
             initial_time = first_time - pd.Timedelta(minutes=1)
@@ -298,9 +390,13 @@ def execute_strategy(strategy_name: str, strategy_config: dict, exchange: str, s
                     qty = pos['quantity']
                     entry_price = actual_entry_price
                     entry_slippage = abs(actual_entry_price - pos['entry_price']) * qty
-                    exit_slippage = abs(actual_exit_price - exit_price) * qty  # will be 0 here since exit_price = actual_exit_price
-                    slippage = entry_slippage  # entry is really the only leg where your ledger had a *prediction* to compare against
-                    
+                    exit_slippage = abs(actual_exit_price - exit_price) * qty
+                    slippage = entry_slippage
+
+                    # Synthetic running balance: previous balance_after_trade + this trade's net_pnl
+                    prev_balance_after_trade = get_last_synthetic_balance(strategy_name)
+                    new_balance_after_trade = prev_balance_after_trade + round(realized_pnl, 4)
+
                     ledger_row = pd.DataFrame([{
                         'trade_id': pos.get('order_id'),
                         'entry_time': pos['entry_time'],
@@ -313,12 +409,13 @@ def execute_strategy(strategy_name: str, strategy_config: dict, exchange: str, s
                         'commission': round(fee, 4),
                         'slippage': round(slippage, 4),
                         'net_pnl': round(realized_pnl, 4),
-                        'balance_after_trade': round(balance, 4),
-                        'exit_reason': reason
+                        'wallet_balance': round(balance, 4),
+                        'exit_reason': reason,
+                        'balance_after_trade': round(new_balance_after_trade, 4)
                     }])
-                    
+
                     save_ledger(ledger_row, strategy_name, if_exists='append', schema='execution_ledgers', table_suffix='')
-                    
+
                     pos['status'] = 'Closed'
                     exec_pos = {
                         'order_id': pos.get('order_id'),
@@ -340,19 +437,34 @@ def execute_strategy(strategy_name: str, strategy_config: dict, exchange: str, s
                     logger.error(f"[{strategy_name}] Max retries reached for position monitoring. Skipping.")
                 time.sleep(fetcher_cfg.get('retry_delay', 5))
 
-    selected_indicators = _extract_indicators_for_strategy(strategy_config, indicator_config)
-    
-    signals = get_signal_df(
-        save_csv=False,
-        exchange=exchange,
-        symbol=symbol,
-        start=start_dt,
-        end=end_dt,
-        strategy_name=strategy_name,
-        selected_indicators=selected_indicators,
-        strategy_config=strategy_config
-    )
-    
+    # Call get_signals — branch on whether this is a saved combination config
+    # (see strategy_builder.save_strategy) or a plain single strategy.
+    allow_combination = strategy_config.get('allow_combination', False)
+
+    if allow_combination:
+        signals = _generate_combination_signals(
+            strategy_name=strategy_name,
+            strategy_config=strategy_config,
+            exchange=exchange,
+            symbol=symbol,
+            time_horizon=time_horizon,
+            start_dt=start_dt,
+            end_dt=end_dt,
+        )
+    else:
+        selected_indicators = _extract_indicators_for_strategy(strategy_config, indicator_config)
+
+        signals = get_signal_df(
+            save_csv=False,
+            exchange=exchange,
+            symbol=symbol,
+            start=start_dt,
+            end=end_dt,
+            strategy_name=strategy_name,
+            selected_indicators=selected_indicators,
+            strategy_config=strategy_config
+        )
+
     if signals is None or signals.empty:
         logger.info(f"[{strategy_name}] No signals generated.")
         return

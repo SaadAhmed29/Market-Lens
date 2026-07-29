@@ -659,15 +659,17 @@ def submit_backtest(config: dict, background_tasks):
     symbol = config.get("symbol", "UNKNOWN")
     timehorizon = config.get("timehorizon", "UNKNOWN")
 
-    if mode == "strategy":
-        base_name = config.get("selected_strategies", [""])[0]
-    elif mode == "model":
-        models = config.get("selected_models", [])
-        base_name = models[0].get("model_name", "model") if models else "model"
-    else:
-        base_name = config.get("strategy_name", "combo")
-        
-    strategy_name = f"{base_name}_{exchange}_{symbol}_{timehorizon}"
+    selected_strategies = config.get("selected_strategies", [])
+    selected_models = config.get("selected_models", [])
+    
+    strategy_name = preview_strategy_name(
+        mode=mode,
+        exchange=exchange,
+        symbol=symbol,
+        timehorizon=timehorizon,
+        strategies=selected_strategies,
+        models=[m.get("model_name") or m.get("model_file") for m in selected_models]
+    )
 
     engine = get_engine()
 
@@ -737,9 +739,11 @@ def save_strategy(config: dict) -> dict:
     allow_execution = False
     allow_simulation = False
     is_combination = config.get("is_combination", False)
+    mode = config.get("mode", "strategy")
     selected_strategies = config.get("selected_strategies", [])
     selected_models = config.get("selected_models", [])
     combination_rule = config.get("combination_rule", "AND")
+    strategy_name_override = config.get("strategy_name_override", "")
 
     def _fetch_long_short(name: str) -> dict:
         with engine.connect() as conn:
@@ -754,17 +758,18 @@ def save_strategy(config: dict) -> dict:
             cfg = json.loads(cfg)
         return {"long": cfg.get("long", {}), "short": cfg.get("short", {})}
 
-    if is_combination:
-        # User-provided name — check uniqueness
-        final_name = strategy_name
-        with engine.connect() as conn:
-            existing = conn.execute(
-                text("SELECT 1 FROM meta_data.strategies WHERE strategy_name = :name LIMIT 1"),
-                {"name": final_name},
-            ).fetchone()
-        if existing:
-            return {"error": "Strategy name already exists, please choose a different name"}
+    auto_name = preview_strategy_name(mode, exchange, symbol, timehorizon, selected_strategies, [m.get("model_name") or m.get("model_file") for m in selected_models])
+    final_name = strategy_name_override if strategy_name_override else auto_name
 
+    with engine.connect() as conn:
+        existing = conn.execute(
+            text("SELECT 1 FROM meta_data.strategies WHERE strategy_name = :name LIMIT 1"),
+            {"name": final_name},
+        ).fetchone()
+    if existing:
+        return {"error": "Strategy name already exists, please choose a different name"}
+
+    if is_combination:
         full_config: dict = {}
         for sname in selected_strategies:
             full_config[sname] = _fetch_long_short(sname)
@@ -783,7 +788,6 @@ def save_strategy(config: dict) -> dict:
 
     else:
         # Single strategy — auto-generate name, pull real long/short from source
-        final_name = f"{exchange}_{symbol}_{timehorizon}_{strategy_name}"
         source = _fetch_long_short(strategy_name) if strategy_name else {"long": {}, "short": {}}
         full_config = {
             "exchange": exchange,
@@ -805,6 +809,43 @@ def save_strategy(config: dict) -> dict:
         )
 
     return {"success": True, "strategy_name": final_name}
+
+
+def preview_strategy_name(
+    mode: str,
+    exchange: str,
+    symbol: str,
+    timehorizon: str,
+    strategies: list[str],
+    models: list[str],
+) -> str:
+    prefix = f"{exchange}_{symbol}_{timehorizon}_"
+    
+    def strip_prefix(name: str) -> str:
+        if name.startswith(prefix):
+            return name[len(prefix):]
+        return name
+
+    if mode == "strategy":
+        strat = strategies[0] if strategies else "unknown"
+        return f"{exchange}_{symbol}_{timehorizon}_{strat}"
+    
+    elif mode == "strategy_combination":
+        parts = [strip_prefix(s) for s in strategies]
+        parts.extend([exchange, symbol, timehorizon])
+        return "_".join(parts)
+        
+    elif mode == "strategy_model_combination":
+        parts = [strip_prefix(s) for s in strategies]
+        parts.extend(models)
+        parts.extend([exchange, symbol, timehorizon])
+        return "_".join(parts)
+        
+    elif mode == "model":
+        mod = models[0] if models else "unknown"
+        return f"{exchange}_{symbol}_{timehorizon}_{mod}"
+        
+    return f"unknown_{exchange}_{symbol}_{timehorizon}"
 
 
 # Request listing / detail  (filtered by source = 'strategy_builder')
@@ -876,8 +917,25 @@ def get_request_detail(request_id: str):
             df["exit_time"] = pd.to_datetime(df["exit_time"])
             df = df.sort_values("exit_time").set_index("exit_time")
 
-            returns = df["balance_after_trade"].pct_change().fillna(0)
-            metrics = calculate_metrics(returns)
+            # Prepend the initial balance as a synthetic first row (at
+            # first_trade_time - 1 minute) so pct_change() correctly
+            # captures the first trade's return instead of it being lost
+            # to NaN/fillna(0). Mirrors _update_simulation_stats.
+            request_config = request_data.get("request_config")
+            if isinstance(request_config, str):
+                request_config = json.loads(request_config)
+            request_config = request_config or {}
+            initial_balance = request_config.get("initial_balance", 10000.0)
+
+            first_time = df.index[0]
+            initial_time = first_time - pd.Timedelta(minutes=1)
+            balances = pd.concat([
+                pd.Series([initial_balance], index=[initial_time]),
+                df["balance_after_trade"]
+            ]).sort_index()
+
+            returns = balances.pct_change().dropna()
+            metrics = calculate_metrics(returns) if not returns.empty else {}
 
             # 1. Equity Curve
             equity_curve = [{"date": str(idx), "value": float(val)} for idx, val in df["balance_after_trade"].items()]

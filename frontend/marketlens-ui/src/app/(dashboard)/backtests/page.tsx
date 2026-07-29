@@ -83,7 +83,7 @@ export default function BacktestsPage() {
 
     const uniqueStrategies = Array.from(new Set(optionsData?.map((o: any) => o.strategy_name).filter(Boolean))) as string[]
     const uniqueSymbols = Array.from(new Set(optionsData?.map((o: any) => o.symbol).filter(Boolean))) as string[]
-    const TIMEFRAMES = ['1m', '5m', '15m', '1h', '4h']
+    const TIMEFRAMES = ['5m', '15m', '30m', '1h', '4h']
     const columns: Column<any>[] = [
         { header: 'STRATEGY', accessorKey: 'strategy_name', className: 'text-accent font-bold' },
         {

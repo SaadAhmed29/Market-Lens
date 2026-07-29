@@ -155,6 +155,12 @@ def get_strategy_options():
                 config = row.get("config") or {}
                 if isinstance(config, str):
                     config = json.loads(config)
+
+                # Skip combination strategies — most configs won't have this
+                # key at all, so absence defaults to False (not a combination)
+                if config.get("allow_combination", False):
+                    continue
+
                 options.append({
                     "strategy_name": row["strategy_name"],
                     "symbol": config.get("symbol", config.get("symbols")),

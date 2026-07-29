@@ -6,6 +6,7 @@ from backend.modules.strategy_builder import (
     get_request_detail,
     submit_backtest,
     save_strategy,
+    preview_strategy_name,
 )
 
 router = APIRouter(prefix="/api", tags=["strategy-builder"])
@@ -64,5 +65,27 @@ def save_strategy_route(config: Dict[str, Any] = Body(...)):
         if "error" in result:
             return {"status": "error", "message": result["error"]}
         return {"status": "success", "data": result}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+
+from fastapi import Query
+
+@router.get("/strategy-builder/preview-name")
+def preview_name_route(
+    mode: str = Query(""),
+    exchange: str = Query(""),
+    symbol: str = Query(""),
+    timehorizon: str = Query(""),
+    strategies: str = Query(""),
+    models: str = Query(""),
+):
+    """Preview auto-generated strategy name."""
+    try:
+        strat_list = [s.strip() for s in strategies.split(",")] if strategies else []
+        mod_list = [m.strip() for m in models.split(",")] if models else []
+        
+        name = preview_strategy_name(mode, exchange, symbol, timehorizon, strat_list, mod_list)
+        return {"status": "success", "data": {"name": name}}
     except Exception as e:
         return {"status": "error", "message": str(e)}

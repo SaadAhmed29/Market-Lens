@@ -8,12 +8,13 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { EmptyState } from '@/components/shared/EmptyState'
 import { DataTable } from '@/components/shared/DataTable'
-import { useStrategyBuilderDetail } from '@/hooks/useStrategyBuilder'
+import { useStrategyBuilderDetail, useSaveStrategy } from '@/hooks/useStrategyBuilder'
 import { BarChart, Bar, ResponsiveContainer, XAxis, YAxis, Tooltip, Cell } from 'recharts'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { EquityCurve } from '@/components/charts/EquityCurve'
 import { DrawdownChart } from '@/components/charts/DrawdownChart'
 import { PieChart } from '@/components/charts/PieChart'
+import { Input } from '@/components/ui/input'
 
 const LEDGER_PAGE_SIZE = 10
 
@@ -43,6 +44,12 @@ export default function StrategyBuilderDetailPage() {
     const requestId = params.id as string
 
     const { data, isLoading, isError } = useStrategyBuilderDetail(requestId)
+
+    const saveStrategy = useSaveStrategy()
+    const [showSaveNameInput, setShowSaveNameInput] = useState(false)
+    const [saveStrategyName, setSaveStrategyName] = useState('')
+    const [saveError, setSaveError] = useState<string | null>(null)
+    const [saveSuccess, setSaveSuccess] = useState(false)
 
     const [ledgerPage, setLedgerPage] = useState(1)
 
@@ -86,6 +93,53 @@ export default function StrategyBuilderDetailPage() {
     if (request.status === 'Completed') statusVariant = 'cyber-completed'
     else if (request.status === 'Running') statusVariant = 'cyber-running'
     else if (request.status === 'Failed') statusVariant = 'cyber-error'
+
+    const isCombination = (config.mode || '').includes('combination')
+
+    const handleSaveStrategy = () => {
+        setSaveError(null)
+        setSaveSuccess(false)
+
+        if (isCombination && !showSaveNameInput) {
+            setShowSaveNameInput(true)
+            return
+        }
+
+        if (isCombination && !saveStrategyName.trim()) {
+            setSaveError("Strategy name is required for combinations")
+            return
+        }
+
+        const payload = {
+            mode: config.mode,
+            is_combination: isCombination,
+            strategy_name: isCombination ? saveStrategyName : (config.selected_strategies?.[0] || 'model_strat'),
+            selected_strategies: config.selected_strategies || [],
+            selected_models: config.selected_models || [],
+            combination_rule: config.combination_rule || 'AND',
+            symbol: config.symbol,
+            exchange: config.exchange,
+            timehorizon: config.timehorizon,
+            allow_execution: true,
+            allow_simulation: true,
+        }
+
+        saveStrategy.mutate(payload, {
+            onSuccess: (res: any) => {
+                if (res.status === 'error') {
+                    setSaveError(res.message || "Failed to save strategy")
+                } else {
+                    setSaveSuccess(true)
+                    setShowSaveNameInput(false)
+                    setSaveStrategyName('')
+                    setTimeout(() => setSaveSuccess(false), 3000)
+                }
+            },
+            onError: (err: any) => {
+                setSaveError(err.message || "An unexpected error occurred")
+            }
+        })
+    }
 
     const handleExport = () => {
         const json = JSON.stringify(ledger, null, 2)
@@ -134,10 +188,28 @@ export default function StrategyBuilderDetailPage() {
     )
 
     return (
-        <PageWrapper title={`SB_${requestId.substring(0, 8)}`} actions={
-            <Button variant="cyber-outline" size="sm" onClick={handleExport}>
-                EXPORT_LEDGER
-            </Button>
+        <PageWrapper title={`${strategyName.substring(0, 20)}......`} actions={
+            <div className="flex items-center gap-2">
+                {showSaveNameInput && (
+                    <div className="flex flex-col">
+                        <Input
+                            placeholder="Combination Strategy Name"
+                            value={saveStrategyName}
+                            onChange={e => setSaveStrategyName(e.target.value)}
+                            className="w-56 border-accent focus-visible:ring-accent"
+                            disabled={saveStrategy.isPending}
+                        />
+                        {saveError && <span className="text-[10px] text-destructive mt-1">{saveError}</span>}
+                        {saveSuccess && <span className="text-[10px] text-accent mt-1">Saved successfully!</span>}
+                    </div>
+                )}
+                <Button variant="cyber-outline" size="sm" onClick={handleSaveStrategy} disabled={saveStrategy.isPending}>
+                    {saveStrategy.isPending ? 'SAVING...' : 'SAVE_STRATEGY'}
+                </Button>
+                <Button variant="cyber-outline" size="sm" onClick={handleExport}>
+                    EXPORT_LEDGER
+                </Button>
+            </div>
         }>
             {/* Header info */}
             <div className="flex flex-wrap items-center gap-4 mb-6">

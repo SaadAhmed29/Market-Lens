@@ -10,6 +10,7 @@ import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { EmptyState } from '@/components/shared/EmptyState'
 import { useStrategyBuilder, useStrategyBuilderOptions, useSubmitStrategyBuilder, useSaveStrategy } from '@/hooks/useStrategyBuilder'
+import api from '@/lib/api'
 
 const REQUESTS_PAGE_SIZE = 10
 
@@ -27,6 +28,7 @@ export default function StrategyBuilderPage() {
     const [selectedModels, setSelectedModels] = useState<string[]>([])
     const [combinationRule, setCombinationRule] = useState<'AND' | 'OR'>('AND')
     const [showSaveNameInput, setShowSaveNameInput] = useState(false)
+    const [placeholderName, setPlaceholderName] = useState('')
     const [saveStrategyName, setSaveStrategyName] = useState('')
     const [saveError, setSaveError] = useState<string | null>(null)
     const [saveSuccess, setSaveSuccess] = useState(false)
@@ -111,20 +113,36 @@ export default function StrategyBuilderPage() {
         setSaveSuccess(false)
         const isCombination = mode.includes('combination')
 
-        if (isCombination && !showSaveNameInput) {
-            setShowSaveNameInput(true)
-            return
-        }
+        if (!showSaveNameInput) {
+            try {
+                const modelNames = selectedModels.map(m => {
+                    const opt = optionsData?.models?.find((opt: any) => opt.model_file === m)
+                    return opt ? opt.model_name || opt.model_file : m
+                })
+                const queryParams = new URLSearchParams({
+                    mode,
+                    exchange,
+                    symbol,
+                    timehorizon: timeframe,
+                    strategies: selectedStrategies.join(','),
+                    models: modelNames.join(',')
+                }).toString()
 
-        if (isCombination && !saveStrategyName.trim()) {
-            setSaveError("Strategy name is required for combinations")
+                const { data } = await api.get(`/strategy-builder/preview-name?${queryParams}`)
+                if (data.status === 'success' && data.data?.name) {
+                    setPlaceholderName(data.data.name)
+                }
+            } catch (err) {
+                console.error("Failed to fetch preview name")
+            }
+            setShowSaveNameInput(true)
             return
         }
 
         const config = {
             mode,
             is_combination: isCombination,
-            strategy_name: isCombination ? saveStrategyName : selectedStrategies[0] || 'model_strat',
+            strategy_name_override: saveStrategyName.trim() || undefined,
             selected_strategies: selectedStrategies,
             selected_models: selectedModels.map(m => optionsData?.models?.find((opt: any) => opt.model_file === m)).filter(Boolean),
             combination_rule: combinationRule,
@@ -157,7 +175,7 @@ export default function StrategyBuilderPage() {
         ...(optionsData?.models?.map((o: any) => o.symbol) || [])
     ].filter(Boolean))) as string[]
 
-    const TIMEFRAMES = ['1m', '5m', '15m', '1h', '4h']
+    const TIMEFRAMES = ['5m', '15m', '30m', '1h', '4h']
     const columns: Column<any>[] = [
         { header: 'STRATEGY', accessorKey: 'strategy_name', className: 'text-accent font-bold' },
         {
@@ -509,10 +527,10 @@ export default function StrategyBuilderPage() {
                                 {showSaveNameInput && (
                                     <div className="flex flex-col">
                                         <Input
-                                            placeholder="Combination Strategy Name"
+                                            placeholder={placeholderName || "Strategy Name"}
                                             value={saveStrategyName}
                                             onChange={e => setSaveStrategyName(e.target.value)}
-                                            className="w-64 border-accent focus-visible:ring-accent"
+                                            className="w-64 border-accent focus-visible:ring-accent placeholder:text-muted-foreground/50"
                                             disabled={saveStrategy.isPending}
                                         />
                                         {saveError && <span className="text-[10px] text-destructive mt-1">{saveError}</span>}
@@ -521,10 +539,9 @@ export default function StrategyBuilderPage() {
                                 )}
                                 <Button
                                     type="button"
-                                    variant="outline"
+                                    variant="cyber-glitch"
                                     onClick={handleSaveStrategy}
                                     disabled={saveStrategy.isPending}
-                                    className="border-accent text-accent hover:bg-accent hover:text-background"
                                 >
                                     {saveStrategy.isPending ? 'SAVING...' : 'SAVE_STRATEGY'}
                                 </Button>

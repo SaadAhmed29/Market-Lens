@@ -54,7 +54,7 @@ features:
           pattern: pat_BULLISH_ENGULFING
 
   sentiment:
-    enabled: true
+    enabled: false
     source:
       - reddit
     aliases:

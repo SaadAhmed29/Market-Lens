@@ -89,6 +89,7 @@ class BacktestEngine:
             time_frame='1m',
             resample_1m=False
         )
+        print(f"DataFrame shape: {df.shape}")
         self.ohlcv_df = df
 
     def load_signals(self):
@@ -96,6 +97,7 @@ class BacktestEngine:
         from utils.config import load_config
         
         strategy_config = self.config.get('strategy_config', {})
+        strategy_config = {**strategy_config, 'timehorizon': self.config.get('timehorizon')}
         indicator_config = load_config("indicators/config.yaml")
         selected_indicators = _extract_indicators_for_strategy(strategy_config, indicator_config)
         
@@ -110,6 +112,7 @@ class BacktestEngine:
                 selected_indicators=selected_indicators,
                 strategy_config=strategy_config
             )
+            print(f"Signals: {self.signal_df.value_counts()}")
         except TypeError:
             self.signal_df = get_signal_df()
             

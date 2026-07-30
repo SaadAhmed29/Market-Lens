@@ -134,7 +134,7 @@ export default function BacktestDetailPage() {
     )
 
     return (
-        <PageWrapper title={`BT_${requestId.substring(0, 8)}`} actions={
+        <PageWrapper title={`BT_${strategyName.substring(0, 18)}.....`} actions={
             <Button variant="cyber-outline" size="sm" onClick={handleExport}>
                 EXPORT_LEDGER
             </Button>

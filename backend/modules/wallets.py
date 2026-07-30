@@ -1,5 +1,6 @@
 from sqlalchemy import text
 from utils.db import get_engine
+import json
 
 def get_all_wallets():
     engine = get_engine()
@@ -121,6 +122,61 @@ def update_wallet_keys(account_name: str, api_key: str, api_secret: str):
                     WHERE account_name = :account_name
                 """),
                 {"api_key": api_key, "api_secret": api_secret, "account_name": account_name}
+            )
+        return {"success": True}
+    except Exception as e:
+        return {"success": False, "message": str(e)}
+
+def get_unassigned_strategies():
+    engine = get_engine()
+    strategies = []
+    
+    with engine.connect() as conn:
+        try:
+            res = conn.execute(
+                text("SELECT strategy_name, config FROM meta_data.strategies WHERE config->>'allow_execution' = 'false' OR config->>'allow_simulation' = 'false'")
+            ).mappings().fetchall()
+            
+            for row in res:
+                config = row["config"]
+                if isinstance(config, str):
+                    config = json.loads(config)
+                    
+                strategies.append({
+                    "strategy_name": row["strategy_name"],
+                    "symbol": config.get("symbol", ""),
+                    "exchange": config.get("exchange", ""),
+                    "timehorizon": config.get("timehorizon", ""),
+                    "allow_execution": config.get("allow_execution", False),
+                    "allow_simulation": config.get("allow_simulation", False)
+                })
+        except Exception:
+            pass
+            
+    return strategies
+
+def assign_strategy(strategy_name: str, allow_execution: bool, allow_simulation: bool):
+    engine = get_engine()
+    try:
+        with engine.begin() as conn:
+            res = conn.execute(
+                text("SELECT config FROM meta_data.strategies WHERE strategy_name = :strategy_name"),
+                {"strategy_name": strategy_name}
+            ).mappings().fetchone()
+            
+            if not res:
+                return {"success": False, "message": "Strategy not found"}
+                
+            config = res["config"]
+            if isinstance(config, str):
+                config = json.loads(config)
+                
+            config["allow_execution"] = allow_execution
+            config["allow_simulation"] = allow_simulation
+            
+            conn.execute(
+                text("UPDATE meta_data.strategies SET config = :config WHERE strategy_name = :strategy_name"),
+                {"config": json.dumps(config), "strategy_name": strategy_name}
             )
         return {"success": True}
     except Exception as e:

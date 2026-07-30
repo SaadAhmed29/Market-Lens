@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/componen
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
-import { useWallets, useUpdateWalletKeys } from '@/hooks/useWallets'
+import { useWallets, useUpdateWalletKeys, useUnassignedStrategies, useAssignStrategy } from '@/hooks/useWallets'
 import { Wallet as WalletIcon } from 'lucide-react'
 import { EmptyState } from '@/components/shared/EmptyState'
 
@@ -76,7 +76,7 @@ function WalletCard({ wallet }: { wallet: any }) {
                 <div className="grid grid-cols-3 gap-2 pt-4 border-t border-border/50">
                     <div className="flex flex-col items-center gap-1">
                         <span className="text-sm font-mono text-foreground">{wallet.total_strategies}</span>
-                        <span className="text-xs text-muted-foreground uppercase tracking-wider text-center">STRATS</span>
+                        <span className="text-xs text-muted-foreground uppercase tracking-wider text-center">STRATEGIES</span>
                     </div>
                     <div className="flex flex-col items-center gap-1 border-x border-border/50">
                         <span className="text-sm font-mono text-foreground">{wallet.active_positions}</span>
@@ -133,12 +133,124 @@ function WalletCard({ wallet }: { wallet: any }) {
     )
 }
 
+function AssignStrategiesDialog() {
+    const [open, setOpen] = useState(false)
+    const { data: unassignedStrategies, isLoading: isLoadingStrategies } = useUnassignedStrategies()
+    const { mutate: assignStrategy, isPending: isAssigning, isSuccess, isError, reset } = useAssignStrategy()
+
+    const [selectedStrategyName, setSelectedStrategyName] = useState<string>('')
+    const [allowExecution, setAllowExecution] = useState(false)
+    const [allowSimulation, setAllowSimulation] = useState(false)
+
+    const handleStrategyChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+        const name = e.target.value
+        setSelectedStrategyName(name)
+        reset()
+        const strategy = unassignedStrategies?.find((s: any) => s.strategy_name === name)
+        if (strategy) {
+            setAllowExecution(strategy.allow_execution)
+            setAllowSimulation(strategy.allow_simulation)
+        } else {
+            setAllowExecution(false)
+            setAllowSimulation(false)
+        }
+    }
+
+    const handleAssign = () => {
+        if (!selectedStrategyName) return
+        assignStrategy({
+            strategy_name: selectedStrategyName,
+            allow_execution: allowExecution,
+            allow_simulation: allowSimulation
+        }, {
+            onSuccess: () => {
+                setSelectedStrategyName('')
+            }
+        })
+    }
+
+    return (
+        <Dialog open={open} onOpenChange={(newOpen) => {
+            setOpen(newOpen)
+            if (!newOpen) {
+                setSelectedStrategyName('')
+                reset()
+            }
+        }}>
+            <DialogTrigger render={<Button variant="cyber-glitch" size="sm" />}>
+                ASSIGN_STRATEGIES
+            </DialogTrigger>
+            <DialogContent>
+                <DialogHeader>
+                    <DialogTitle>ASSIGN_STRATEGIES</DialogTitle>
+                </DialogHeader>
+                <div className="flex flex-col gap-4 py-4">
+                    <div className="flex flex-col gap-2">
+                        <label className="text-[10px] text-muted-foreground uppercase tracking-widest font-mono">SELECT_STRATEGY</label>
+                        <select
+                            className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 font-mono"
+                            value={selectedStrategyName}
+                            onChange={handleStrategyChange}
+                            disabled={isLoadingStrategies || isAssigning}
+                        >
+                            <option value="">-- Select Strategy --</option>
+                            {unassignedStrategies?.map((s: any) => (
+                                <option key={s.strategy_name} value={s.strategy_name}>
+                                    {s.strategy_name} ({s.symbol} - {s.exchange})
+                                </option>
+                            ))}
+                        </select>
+                    </div>
+
+                    {selectedStrategyName && (
+                        <>
+                            <div className="flex items-center justify-between">
+                                <label className="text-[10px] text-muted-foreground uppercase tracking-widest font-mono">ALLOW_EXECUTION</label>
+                                <input
+                                    type="checkbox"
+                                    className="w-5 h-5 accent-accent"
+                                    checked={allowExecution}
+                                    onChange={(e) => setAllowExecution(e.target.checked)}
+                                    disabled={isAssigning}
+                                />
+                            </div>
+                            <div className="flex items-center justify-between">
+                                <label className="text-[10px] text-muted-foreground uppercase tracking-widest font-mono">ALLOW_SIMULATION</label>
+                                <input
+                                    type="checkbox"
+                                    className="w-5 h-5 accent-accent"
+                                    checked={allowSimulation}
+                                    onChange={(e) => setAllowSimulation(e.target.checked)}
+                                    disabled={isAssigning}
+                                />
+                            </div>
+                        </>
+                    )}
+
+                    {isSuccess && <div className="text-accent text-xs tracking-widest uppercase font-mono mt-2 text-center">STRATEGY_ASSIGNED_SUCCESSFULLY</div>}
+                    {isError && <div className="text-destructive text-xs tracking-widest uppercase font-mono mt-2 text-center">FAILED_TO_ASSIGN_STRATEGY</div>}
+                </div>
+                <DialogFooter>
+                    <Button
+                        variant="cyber-glitch"
+                        onClick={handleAssign}
+                        disabled={isAssigning || !selectedStrategyName}
+                    >
+                        {isAssigning ? 'ASSIGNING...' : 'ASSIGN'}
+                    </Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    )
+}
+
 export default function WalletsPage() {
     const { data: wallets, isLoading, isError } = useWallets()
 
     return (
         <PageWrapper
             title="EXCHANGE WALLETS"
+            actions={<AssignStrategiesDialog />}
         >
             {isError ? (
                 <EmptyState message="FAILED_TO_LOAD_WALLETS" />

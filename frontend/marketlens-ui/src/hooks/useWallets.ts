@@ -38,3 +38,28 @@ export function useUpdateWalletKeys() {
         }
     })
 }
+
+export function useUnassignedStrategies() {
+    return useQuery({
+        queryKey: ['unassigned_strategies'],
+        queryFn: async () => {
+            const { data } = await api.get('/wallets/strategies/unassigned')
+            return data.data ?? []
+        },
+        staleTime: 60000,
+    })
+}
+
+export function useAssignStrategy() {
+    const queryClient = useQueryClient()
+
+    return useMutation({
+        mutationFn: async ({ strategy_name, allow_execution, allow_simulation }: { strategy_name: string, allow_execution: boolean, allow_simulation: boolean }) => {
+            const { data } = await api.put('/wallets/strategies/assign', { strategy_name, allow_execution, allow_simulation })
+            return data
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['unassigned_strategies'] })
+        }
+    })
+}

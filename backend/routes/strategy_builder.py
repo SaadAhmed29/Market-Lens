@@ -61,6 +61,7 @@ def submit_strategy_builder_route(
 def save_strategy_route(config: Dict[str, Any] = Body(...)):
     """Save a strategy to meta_data.strategies."""
     try:
+        print("strategy_name: ", config)
         result = save_strategy(config)
         if "error" in result:
             return {"status": "error", "message": result["error"]}

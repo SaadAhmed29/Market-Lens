@@ -601,7 +601,14 @@ def run_backtest_task(req_id: str, config: dict, strategy_name: str):
                 df = pd.DataFrame(ledger)
                 df["exit_time"] = pd.to_datetime(df["exit_time"])
                 df = df.sort_values("exit_time").set_index("exit_time")
-                returns = df["balance_after_trade"].pct_change().fillna(0)
+                initial_balance = config.get("initial_balance", 10000.0)
+                first_time = df.index[0]
+                initial_time = first_time - pd.Timedelta(minutes=1)
+                balances = pd.concat([
+                    pd.Series([initial_balance], index=[initial_time]),
+                    df["balance_after_trade"]
+                ]).sort_index()
+                returns = balances.pct_change().dropna()
 
                 if not returns.empty and returns.std() != 0:
                     metrics = calculate_metrics(returns)
@@ -788,6 +795,7 @@ def save_strategy(config: dict) -> dict:
 
     else:
         # Single strategy — auto-generate name, pull real long/short from source
+        strategy_name = selected_strategies[0]
         source = _fetch_long_short(strategy_name) if strategy_name else {"long": {}, "short": {}}
         full_config = {
             "exchange": exchange,

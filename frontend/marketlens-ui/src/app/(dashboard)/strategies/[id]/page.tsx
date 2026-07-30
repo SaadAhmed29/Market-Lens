@@ -62,7 +62,6 @@ const METRICS: MetricConfig[] = [
     { key: 'profit_ratio', label: 'PROFIT RATIO', format: 'ratio' },
     { key: 'rar', label: 'RAR', format: 'percent' },
     { key: 'risk_of_ruin', label: 'RISK OF RUIN', format: 'percent' },
-    { key: 'ror', label: 'ROR', format: 'percent' },
     { key: 'tail_ratio', label: 'TAIL RATIO', format: 'ratio' },
     { key: 'ulcer_performance_index', label: 'ULCER PERF INDEX', format: 'ratio' },
     { key: 'upi', label: 'UPI', format: 'ratio' },
